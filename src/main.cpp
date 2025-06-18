@@ -90,14 +90,12 @@ static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
 }
 
 static bool listenString(String& input, char terminator = '\n') {
-    while (true) {
-        if (Serial.available() > 0) {
-            char c = Serial.read();
-            if (c == terminator) {
-                return true; // End of input
-            } else {
-                input += c; // Append character to input
-            }
+    while (Serial.available() > 0) {
+        char c = Serial.read();
+        if (c == terminator) {
+            return true; // End of input
+        } else {
+            input += c; // Append character to input
         }
     }
     return false; // Should never reach here
@@ -120,11 +118,11 @@ void setup() {
 }
 
 
-
-
 void loop() {
     String input = "";
     meshsolar_cmd_t cmd;
+    static uint32_t cnt = 0; 
+    cnt++;
 
     input = ""; // Reset input for new command
     if(listenString(input, ' ')) {
@@ -132,12 +130,14 @@ void loop() {
         if (res) {
             printMeshsolarCmd(&cmd);
             /*  add some func call back here base on cmd sector */
-            
+
         } else {
             Serial.println("Failed to parse command");
         }
     }
 
-
-
+    if(cnt % 1000 == 0) {
+        Serial.println("Loop count: " + String(cnt));
+    }
+    delay(1);
 }
