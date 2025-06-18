@@ -4,42 +4,9 @@
 #include "solar.h"
 
 
-const char *json_config = 
-"{"
-"  \"command\": \"config\","
-"  \"battery\": {"
-"    \"type\": \"LiFePO4\","
-"    \"cell_number\": 4,"
-"    \"design_capacity\": 3200,"
-"    \"cutoff_voltage\": 2800"
-"  },"
-"  \"temperature_protection\": {"
-"    \"high_temp_c\": 60,"
-"    \"high_temp_enabled\": true,"
-"    \"low_temp_c\": -10,"
-"    \"low_temp_enabled\": true"
-"  }"
-"}";
+// {"command":"config","battery":{"type":"LiFePO4","cell_number":4,"design_capacity":3200,"cutoff_voltage":2800},"temperature_protection":{"high_temp_c":60,"high_temp_enabled":true,"low_temp_c":-10,"low_temp_enabled":true}}
 
-const char *json_reset = 
-"{"
-"  \"command\": \"reset\""
-"}";
-
-const char *json_switch = 
-"{"
-"  \"command\": \"switch\","
-"  \"fet_en\": true"
-"}";
-
-
-
-
-
-meshsolar_cmd_t cmd;
-
-
-void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
+static void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
     Serial.print("Command: ");
     Serial.println(cmd->command);
 
@@ -62,76 +29,124 @@ void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
     }
 }
 
+static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
+    StaticJsonDocument<1024> doc;
+    DeserializationError error = deserializeJson(doc, json);
+    if (error) {
+        Serial.print("Parse failed: ");
+        Serial.println(error.c_str());
+        return false;
+    }
 
+    // clear the command structure
+    memset(cmd, 0, sizeof(meshsolar_cmd_t));
+
+    if (!doc.containsKey("command")) {
+        Serial.println("Missing 'command' field");
+        return false;
+    }
+    strlcpy(cmd->command, doc["command"] | "", sizeof(cmd->command));
+
+    if (strcmp(cmd->command, "config") == 0) {
+        if (!doc.containsKey("battery") || !doc.containsKey("temperature_protection")) {
+            Serial.println("Missing 'battery' or 'temperature_protection' field for 'config' command");
+            return false;
+        }
+        JsonObject battery = doc["battery"];
+        JsonObject tp = doc["temperature_protection"];
+        if (!battery.containsKey("type") ||
+            !battery.containsKey("cell_number") ||
+            !battery.containsKey("design_capacity") ||
+            !battery.containsKey("cutoff_voltage") ||
+            !tp.containsKey("high_temp_c") ||
+            !tp.containsKey("high_temp_enabled") ||
+            !tp.containsKey("low_temp_c") ||
+            !tp.containsKey("low_temp_enabled")) {
+            Serial.println("Missing fields in 'battery' or 'temperature_protection'");
+            return false;
+        }
+        strlcpy(cmd->battery.type, battery["type"] | "", sizeof(cmd->battery.type));
+        cmd->battery.cell_number = battery["cell_number"] | 0;
+        cmd->battery.design_capacity = battery["design_capacity"] | 0;
+        cmd->battery.cutoff_voltage = battery["cutoff_voltage"] | 0;
+
+        cmd->temperature_protection.high_temp_c = tp["high_temp_c"] | 0;
+        cmd->temperature_protection.high_temp_enabled = tp["high_temp_enabled"] | false;
+        cmd->temperature_protection.low_temp_c = tp["low_temp_c"] | 0;
+        cmd->temperature_protection.low_temp_enabled = tp["low_temp_enabled"] | false;
+    } else if (strcmp(cmd->command, "switch") == 0) {
+        if (!doc.containsKey("fet_en")) {
+            Serial.println("Missing 'fet_en' field for 'switch' command");
+            return false;
+        }
+        cmd->fet_en = doc["fet_en"] | false;
+    } else if (strcmp(cmd->command, "reset") == 0) {
+
+    } else {
+        Serial.println("Unknown command");
+        return false;
+    }
+
+    return true;
+}
+
+static bool listenString(String& input, char terminator = '\n') {
+    while (true) {
+        if (Serial.available() > 0) {
+            char c = Serial.read();
+            if (c == terminator) {
+                return true; // End of input
+            } else {
+                input += c; // Append character to input
+            }
+        }
+    }
+    return false; // Should never reach here
+}
 
 void setup() {
-  // delay(1000); 
   Serial.begin(115200); 
   time_t timeout = millis();
-  // Waiting for Serial
   while (!Serial){
     if ((millis() - timeout) < 10000){
       delay(100);
     }
   }
   Serial.println("================================");
-  Serial.println("MeshTower BQ4050 example");
+  Serial.println("     MeshTower BQ4050 example   ");
   Serial.println("================================");
 
   Serial.begin(115200);
   Serial.println("Please input JSON string and end with newline:");
 }
 
+
+
+
 void loop() {
-    static String input;
-    while (Serial.available() > 0) {
-        char c = Serial.read();
-        if (c == ' ') {
-            // prase JSON
-            StaticJsonDocument<1024> doc;
-            DeserializationError error = deserializeJson(doc, input);
-            if (error) {
-                Serial.print("Parse failed: ");
-                Serial.println(error.c_str());
-                input = "";
-                return;
-            }
+    String input = "";
+    meshsolar_cmd_t cmd;
+    // while (Serial.available() > 0) {
+    //     char c = Serial.read();
+    //     if (c == ' ') {
+    //       bool res = parseJsonCommand(input.c_str(), &cmd);
+    //       if(!res) continue;
+    //       printMeshsolarCmd(&cmd);
+    //     } else {
+    //         input += c;
+    //     }
+    // }
 
-            // clear the command structure
-            memset(&cmd, 0, sizeof(cmd));
-
-            // prase command
-            strlcpy(cmd.command, doc["command"] | "", sizeof(cmd.command));
-
-            // prase battery
-            if (doc.containsKey("battery")) {
-                JsonObject battery = doc["battery"];
-                strlcpy(cmd.battery.type, battery["type"] | "", sizeof(cmd.battery.type));
-                cmd.battery.cell_number = battery["cell_number"] | 0;
-                cmd.battery.design_capacity = battery["design_capacity"] | 0;
-                cmd.battery.cutoff_voltage = battery["cutoff_voltage"] | 0;
-            }
-
-            // prase temperature_protection
-            if (doc.containsKey("temperature_protection")) {
-                JsonObject tp = doc["temperature_protection"];
-                cmd.temperature_protection.high_temp_c = tp["high_temp_c"] | 0;
-                cmd.temperature_protection.high_temp_enabled = tp["high_temp_enabled"] | false;
-                cmd.temperature_protection.low_temp_c = tp["low_temp_c"] | 0;
-                cmd.temperature_protection.low_temp_enabled = tp["low_temp_enabled"] | false;
-            }
-
-            // prase fet_en
-            if (doc.containsKey("fet_en")) {
-                cmd.fet_en = doc["fet_en"] | false;
-            }
-
-            // print the command structure
+    input = ""; // Reset input for new command
+    if(listenString(input, ' ')) {
+        bool res = parseJsonCommand(input.c_str(), &cmd);
+        if (res) {
             printMeshsolarCmd(&cmd);
+            /*  add some func call back here base on cmd sector*/
 
-            input = "";
         } else {
-            input += c;
+            Serial.println("Failed to parse command");
         }
+        input = ""; // Clear input after processing
     }
 }
