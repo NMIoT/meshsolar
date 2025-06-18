@@ -3,7 +3,6 @@
 #include <ArduinoJson.h>
 #include "solar.h"
 
-
 // {"command":"config","battery":{"type":"LiFePO4","cell_number":4,"design_capacity":3200,"cutoff_voltage":2800},"temperature_protection":{"high_temp_c":60,"high_temp_enabled":true,"low_temp_c":-10,"low_temp_enabled":true}}
 
 static void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
@@ -126,27 +125,19 @@ void setup() {
 void loop() {
     String input = "";
     meshsolar_cmd_t cmd;
-    // while (Serial.available() > 0) {
-    //     char c = Serial.read();
-    //     if (c == ' ') {
-    //       bool res = parseJsonCommand(input.c_str(), &cmd);
-    //       if(!res) continue;
-    //       printMeshsolarCmd(&cmd);
-    //     } else {
-    //         input += c;
-    //     }
-    // }
 
     input = ""; // Reset input for new command
     if(listenString(input, ' ')) {
         bool res = parseJsonCommand(input.c_str(), &cmd);
         if (res) {
             printMeshsolarCmd(&cmd);
-            /*  add some func call back here base on cmd sector*/
-
+            /*  add some func call back here base on cmd sector */
+            
         } else {
             Serial.println("Failed to parse command");
         }
-        input = ""; // Clear input after processing
     }
+
+
+
 }
