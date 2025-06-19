@@ -2,6 +2,7 @@
 #include "Adafruit_TinyUSB.h"
 #include <ArduinoJson.h>
 #include "solar.h"
+#include <Wire.h>
 
 // {"command":"config","battery":{"type":"LiFePO4","cell_number":4,"design_capacity":3200,"cutoff_voltage":2800},"temperature_protection":{"high_temp_c":60,"high_temp_enabled":true,"low_temp_c":-10,"low_temp_enabled":true}}
 
@@ -101,20 +102,123 @@ static bool listenString(String& input, char terminator = '\n') {
     return false; // Should never reach here
 }
 
-void setup() {
-  Serial.begin(115200); 
-  time_t timeout = millis();
-  while (!Serial){
-    if ((millis() - timeout) < 10000){
-      delay(100);
+#define SDA_PIN 33
+#define SCL_PIN 32
+
+#define BQ4050addr 0x0B //0x0B
+
+#define BLOCK_CMD (0x44)
+
+#define BQ4050_REG_CAPACITY_ALARM 0x01 // Remaining Capacity Alarm
+#define BQ4050_REG_TIME_ALARM 0x02     // Remaining Time Alarm
+#define BQ4050_REG_BAT_MODE 0x03       // Battery Mode
+#define BQ4050_REG_TEMP 0x08
+#define BQ4050_REG_VOLT 0x09
+#define BQ4050_REG_CURRENT 0x0A
+#define BQ4050_REG_AVG_CURRENT 0x0B
+#define BQ4050_REG_RSOC 0x0D // Relative State of Charge
+#define BQ4050_REG_ASOC 0x0E // Absolute State of Charge
+#define BQ4050_REG_RC 0x0F   // predicted remaining battery capacity
+#define BQ4050_REG_FCC 0x10  // Full Charge Capacity
+#define BQ4050_REG_ATTE 0x12 // Average Time To Empty
+#define BQ4050_REG_ATTF 0x13 // Average Time To Full
+#define BQ4050_REG_RMC 0x0F  // Remaining Capacity
+#define BQ4050_REG_MAC 0x44
+
+/* ManufacturerAccess */
+#define PCHG_FET_Toggle 0x1E
+#define CHG_FET_Toggle 0x1F
+#define DSG_FET_Toggle 0x20
+#define FETcontrol 0x22
+
+#define MAC_CMD_FW_VER 0x0002
+#define MAC_CMD_SECURITY_KEYS 0x0035
+
+
+byte crctable[256];
+boolean printResults;
+
+void CalculateTable_CRC8(){
+  // Function that generates byte array as a lookup table to quickly create a CRC8 for the PEC
+  const byte generator = 0x07;
+  /* iterate over all byte values 0 - 255 */
+  for (int divident = 0; divident < 256; divident++)
+  {
+    byte currByte = (byte)divident;
+    /* calculate the CRC-8 value for current byte */
+    for (byte bit = 0; bit < 8; bit++)
+    {
+      if ((currByte & 0x80) != 0)
+      {
+        currByte <<= 1;
+        currByte ^= generator;
+      }
+      else
+      {
+        currByte <<= 1;
+      }
+    }
+    /* store CRC value in lookup table */
+    crctable[divident] = currByte;
+    if (printResults)
+    {
+      if (divident % 16 == 0 && divident > 2)
+      {
+        Serial.println();
+      }
+      if (currByte < 16)
+        Serial.print("0");
+      Serial.print(currByte, HEX);
+      Serial.print("\t");
     }
   }
-  Serial.println("================================");
-  Serial.println("     MeshTower BQ4050 example   ");
-  Serial.println("================================");
+  if (printResults)
+  {
+    Serial.println();
+  }
+}
 
-  Serial.begin(115200);
-  Serial.println("Please input JSON string and end with newline:");
+uint16_t readBQ4050Register(uint8_t reg){
+    Wire.beginTransmission(BQ4050addr);
+    Wire.write(reg);
+    Wire.endTransmission();
+    delay(5); // Wait for the device to process the command
+    Wire.requestFrom(BQ4050addr, 2);
+    if (Wire.available() == 2){
+        uint8_t lsb = Wire.read();
+        uint8_t msb = Wire.read();
+        return (msb << 8) | lsb;
+    }
+    return 0xFFFF;
+}
+
+
+
+
+
+void setup() {
+    Serial.begin(115200); 
+    time_t timeout = millis();
+    while (!Serial){
+        if ((millis() - timeout) < 10000){
+        delay(100);
+        }
+    }
+
+    Wire.setPins(SDA_PIN, SCL_PIN);
+    Wire.setClock(100000);
+    Wire.begin(); 
+    CalculateTable_CRC8();
+
+    delay(3000); // Wait for serial to initialize
+
+
+    Serial.println("================================");
+    Serial.println("     MeshTower BQ4050 example   ");
+    Serial.println("================================");
+
+    Serial.begin(115200);
+    Serial.println("Please input JSON string and end with newline:");
 }
 
 
@@ -137,7 +241,15 @@ void loop() {
     }
 
     if(cnt % 1000 == 0) {
-        Serial.println("Loop count: " + String(cnt));
+        uint16_t voltage = readBQ4050Register(BQ4050_REG_VOLT);
+        Serial.print("Voltage                     :\t");
+        Serial.print(voltage);
+        Serial.println("\tmV");
+
+        uint16_t remainingCapacity = readBQ4050Register(BQ4050_REG_CAPACITY_ALARM);
+        Serial.print("Remaining Capacity         :\t");
+        Serial.print(remainingCapacity);
+        Serial.println("\tmAh");
     }
     delay(1);
 }
