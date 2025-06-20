@@ -27,4 +27,22 @@ typedef struct {
     bool fet_en;                   // FET switch, valid only for "switch" command
 } meshsolar_cmd_t;
 
+
+
+typedef struct {
+    int cell_num;         // Cell number
+    float temperature;    // Cell temperature
+    float voltage;        // Cell voltage
+} cell_status_t;
+
+typedef struct {
+    char command[16];         // Command type, e.g. "status"
+    int soc_gauge;            // State of charge (%)
+    int charge_current;       // Charge current (mA)
+    float total_voltage;      // Total voltage (V)
+    float learned_capacity;   // Learned capacity (Ah)
+    cell_status_t cells[8];   // Array for cell status (adjust size as needed)
+    int cell_count;           // Number of valid cells in the array
+} meshsolar_status_t;
+
 #endif // SOLAR_H
