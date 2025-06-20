@@ -234,43 +234,52 @@ bool writeBQ4050BlockCommand(uint16_t cmd) {
 }
 
 // 读取MAC块数据
-bool readBQ4050BlockData(uint8_t *buf, uint8_t len) {
-    Wire.beginTransmission(BQ4050addr);
-    Wire.write(BLOCK_ACCESS_CMD); // 0x44
-    Wire.endTransmission(false); // 不结束传输，继续发送数据
-    delay(10); // 等待设备处理命令
-    uint8_t count = Wire.requestFrom(BQ4050addr, len + 2); // [Count][Data...][PEC]
-    Serial.print("Read BQ4050 Block Data Count: ");
-    Serial.println(count);
+bool readBQ4050BlockData() {
+    uint8_t len = 4 + 2; // 读取数据长度
+    uint8_t buf[32] = {0}; 
 
-    if (count < len + 2) return false;
+    Wire.beginTransmission(BQ4050addr);
+    Wire.write(BLOCK_ACCESS_CMD);
+    Wire.endTransmission(false); 
+    delay(10); 
+    uint8_t count = Wire.requestFrom(BQ4050addr, len); // [Count][Data...][PEC]
+    if(count != len) {
+        Serial.println("Not enough data available from BQ4050!");
+        return false;
+    }
+
     uint8_t block_len = Wire.read(); // 第一个字节是数据长度
-    if (block_len < len) return false;
+
+    Serial.print("Block Length: ");
+    Serial.println(block_len);
+
     for (uint8_t i = 0; i < len; i++) {
         buf[i] = Wire.read();
+        if (buf[i] < 0x10) Serial.print("0");
+        Serial.print(buf[i], HEX);
+        Serial.print(" ");
     }
-    Wire.read(); // 读PEC字节（可选校验）
+    // Wire.read(); // 读PEC字节（可选校验）
     return true;
 }
 
 // 读取固件版本号
-bool bq4050_read_fw_version(uint8_t *fw_buf, uint8_t fw_len) {
+bool bq4050_read_fw_version() {
     if (!writeBQ4050BlockCommand(MAC_CMD_HW_VER)) {
         Serial.println("Write MAC_CMD_HW_VER failed!");
         return false;
     }
-    delay(5);
-    if (!readBQ4050BlockData(fw_buf, fw_len)) {
+    if (!readBQ4050BlockData()) {
         Serial.println("Read HW version failed!");
         return false;
     }
 
-    Serial.print("BQ4050 HW Version Block: ");
-    for (uint8_t i = 0; i < fw_len; i++) {
-        Serial.print(fw_buf[i], HEX);
-        Serial.print(" ");
-    }
-    Serial.println();
+    // Serial.print("BQ4050 HW Version Block: ");
+    // for (uint8_t i = 0; i < fw_len; i++) {
+    //     Serial.print(fw_buf[i], HEX);
+    //     Serial.print(" ");
+    // }
+    // Serial.println();
     return true;
 }
 
@@ -323,6 +332,26 @@ void loop() {
         Serial.print(voltage);
         Serial.println("\tmV");
 
+        uint16_t Vcell1 = bq4050_rd_word(BQ4050_CELL1_VOLTAGE);
+        Serial.print("Cell 1 Voltage             :\t");
+        Serial.print(Vcell1);
+        Serial.println("\tmV");
+
+        uint16_t Vcell2 = bq4050_rd_word(BQ4050_CELL2_VOLTAGE);
+        Serial.print("Cell 2 Voltage             :\t");
+        Serial.print(Vcell2);
+        Serial.println("\tmV");
+
+        uint16_t Vcell3 = bq4050_rd_word(BQ4050_CELL3_VOLTAGE);
+        Serial.print("Cell 3 Voltage             :\t");
+        Serial.print(Vcell3);
+        Serial.println("\tmV");
+
+        uint16_t Vcell4 = bq4050_rd_word(BQ4050_CELL4_VOLTAGE);
+        Serial.print("Cell 4 Voltage             :\t");
+        Serial.print(Vcell4);
+        Serial.println("\tmV");
+
         uint16_t remainingCapacity = bq4050_rd_word(BQ4050_REG_TIME_ALARM);
         Serial.print("Remaining Capacity         :\t");
         Serial.print(remainingCapacity);
@@ -335,23 +364,23 @@ void loop() {
 
 
         if(remainingCapacity == 300){
-            Serial.println("Remaining Capacity is 300mAh, setting it to 1000mAh");
+            // Serial.println("Remaining Capacity is 300mAh, setting it to 1000mAh");
             bq4050_wd_word(BQ4050_REG_TIME_ALARM, 1000);
         }
         else{
-            Serial.println("Remaining Capacity is not 300mAh, no need to set it");
+            // Serial.println("Remaining Capacity is not 300mAh, no need to set it");
             bq4050_wd_word(BQ4050_REG_TIME_ALARM, 300);
         }
 
 
 
-        // uint8_t fw_buf[13] = {0,};
-        // bq4050_read_fw_version(fw_buf, 13);
+        // uint8_t fw_buf[2] = {0,};
+        bq4050_read_fw_version();
         // Serial.print("BQ4050 hardware Version    :\t");
-        // for(uint8_t i = 0; i < 13; i++) {
+        // for(uint8_t i = 0; i < sizeof(fw_buf); i++) {
         //     Serial.print(fw_buf[i], HEX);
         // }
-        // Serial.println();
+        Serial.println();
         Serial.println("================================");
     }
     delay(1);
