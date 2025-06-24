@@ -176,15 +176,16 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     doc["command"] = status->command;
     doc["soc_gauge"] = status->soc_gauge;
     doc["charge_current"] = status->charge_current;
-    doc["total_voltage"] = status->total_voltage;
-    doc["learned_capacity"] = status->learned_capacity;
+    // 保留2位小数
+    doc["total_voltage"] = String(status->total_voltage, 2);
+    doc["learned_capacity"] = String(status->learned_capacity, 2);
 
     JsonArray cells = doc.createNestedArray("cells");
     for (int i = 0; i < status->cell_count; ++i) {
         JsonObject cell = cells.createNestedObject();
         cell["cell_num"] = status->cells[i].cell_num;
-        cell["temperature"] = status->cells[i].temperature;
-        cell["voltage"] = status->cells[i].voltage;
+        cell["temperature"] = String(status->cells[i].temperature, 2);
+        cell["voltage"] = String(status->cells[i].voltage, 2);
     }
 
     output = "";
@@ -233,35 +234,75 @@ bool writeBQ4050BlockCommand(uint16_t cmd) {
     return (ack == 0);
 }
 
-// 读取MAC块数据
-bool readBQ4050BlockData() {
-    uint8_t len = 4 + 2; // 读取数据长度
-    uint8_t buf[32] = {0}; 
+// // 读取MAC块数据
+// bool readBQ4050BlockData() {
+//     uint8_t len = 4 + 2; // 读取数据长度
+//     uint8_t buf[32] = {0}; 
 
+//     Wire.beginTransmission(BQ4050addr);
+//     Wire.write(BLOCK_ACCESS_CMD);
+//     Wire.endTransmission(false); 
+//     delay(10); 
+//     uint8_t count = Wire.requestFrom(BQ4050addr, len); // [Count][Data...][PEC]
+//     if(count != len) {
+//         Serial.println("Not enough data available from BQ4050!");
+//         return false;
+//     }
+
+//     uint8_t block_len = Wire.read(); // 第一个字节是数据长度
+
+//     Serial.print("Block Length: ");
+//     Serial.println(block_len);
+
+//     for (uint8_t i = 0; i < len; i++) {
+//         buf[i] = Wire.read();
+//         if (buf[i] < 0x10) Serial.print("0");
+//         Serial.print(buf[i], HEX);
+//         Serial.print(" ");
+//     }
+//     // Wire.read(); // 读PEC字节（可选校验）
+//     return true;
+// }
+
+
+bool readBQ4050BlockData() {
+    uint8_t buf[32] = {0};
+    
+    // 1. 发送写地址 + 命令码（BLOCK_ACCESS_CMD）
     Wire.beginTransmission(BQ4050addr);
     Wire.write(BLOCK_ACCESS_CMD);
-    Wire.endTransmission(false); 
-    delay(10); 
-    uint8_t count = Wire.requestFrom(BQ4050addr, len); // [Count][Data...][PEC]
-    if(count != len) {
-        Serial.println("Not enough data available from BQ4050!");
+    Wire.endTransmission(false); // 保持连接
+
+    // 2. 发送读地址 + 请求数据（含字节计数）
+    uint8_t count = Wire.requestFrom(BQ4050addr, (uint8_t)32); // 请求最大可能长度
+    if (count == 0) {
+        Serial.println("No data received!");
         return false;
     }
 
-    uint8_t block_len = Wire.read(); // 第一个字节是数据长度
+    // 3. 读取字节计数（第一个字节）
+    uint8_t block_len = Wire.read();
+    if (block_len > sizeof(buf)) {
+        Serial.println("Data too long for buffer!");
+        return false;
+    }
 
-    Serial.print("Block Length: ");
-    Serial.println(block_len);
-
-    for (uint8_t i = 0; i < len; i++) {
+    // 4. 读取后续数据（根据block_len）
+    for (uint8_t i = 0; i < block_len + 1; i++) {
         buf[i] = Wire.read();
-        if (buf[i] < 0x10) Serial.print("0");
+        Serial.print(buf[i] < 0x10 ? "0" : "");
         Serial.print(buf[i], HEX);
         Serial.print(" ");
     }
-    // Wire.read(); // 读PEC字节（可选校验）
+
+    // 5. 可选：读取PEC校验字节
+    // if (Wire.available()) {
+    //     uint8_t pec = Wire.read();
+    //     // 校验PEC...
+    // }
     return true;
 }
+
 
 // 读取固件版本号
 bool bq4050_read_fw_version() {
@@ -293,16 +334,19 @@ void setup() {
         }
     }
 
+
+
+
     Wire.setPins(SDA_PIN, SCL_PIN);
     Wire.setClock(100000);
     Wire.begin(); 
     CalculateTable_CRC8();
     delay(1000);
 
+    
     Serial.println("================================");
     Serial.println("     MeshTower BQ4050 example   ");
     Serial.println("================================");
-
     Serial.begin(115200);
     Serial.println("Please input JSON string and end with newline:");
 }
@@ -312,21 +356,28 @@ void loop() {
     String input = "";
     meshsolar_cmd_t cmd;
     static uint32_t cnt = 0; 
+    static meshsolar_status_t bat_status;
     cnt++;
 
     input = ""; // Reset input for new command
-    if(listenString(input, ' ')) {
+    if(listenString(input, '\n')) {
+        Serial.print("Received command: ");
+        Serial.println(input);
         bool res = parseJsonCommand(input.c_str(), &cmd);
         if (res) {
             printMeshsolarCmd(&cmd);
             /*  add some func call back here base on cmd sector */
+
+
+
 
         } else {
             Serial.println("Failed to parse command");
         }
     }
 
-    if(cnt % 1000 == 0) {
+#if 0
+    if(0 == cnt % 1000) {
         uint16_t voltage = bq4050_rd_word(BQ4050_REG_VOLT);
         Serial.print("Voltage                    :\t");
         Serial.print(voltage);
@@ -382,6 +433,33 @@ void loop() {
         // }
         Serial.println();
         Serial.println("================================");
+    }
+#endif
+
+
+
+
+    if(0 == cnt % 1500){
+
+        Serial.println("test...");
+
+
+
+
+        bat_status.cell_count = 4; // cell count
+        bat_status.soc_gauge = random(0, 101); // 0~100%
+        bat_status.charge_current = random(0, 2001); // 0~2000 mA
+        bat_status.total_voltage = random(1100, 1680) / 100.0; // 11.00~16.80 V
+        bat_status.learned_capacity = random(40, 81) / 10.0; // 4.0~8.0 Ah
+        for (int i = 0; i < bat_status.cell_count; ++i) {
+            bat_status.cells[i].cell_num = i + 1;
+            bat_status.cells[i].temperature = random(200, 400) / 10.0; // 20.0~40.0℃
+            bat_status.cells[i].voltage = random(320, 430) / 100.0; // 3.20~4.30V
+        }
+        strlcpy(bat_status.command, "status", sizeof(bat_status.command));
+        String json = "";
+        meshsolarStatusToJson(&bat_status, json);
+        Serial.println(json);
     }
     delay(1);
 }
