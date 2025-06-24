@@ -348,11 +348,31 @@ void setup() {
 }
 
 
+
+static meshsolar_cmd_t bat_cmd = {
+    "", // command
+    {   // battery
+        "LiFePO4", // type
+        3,         // cell_number
+        3200,      // design_capacity
+        2800       // cutoff_voltage
+    },
+    {   // temperature_protection
+        60,   // high_temp_c
+        true, // high_temp_enabled
+        -10,  // low_temp_c
+        true  // low_temp_enabled
+    },
+    false // fet_en
+};
+static meshsolar_status_t bat_sta = {0,};    // Initialize status structure
+
+
+
+
 void loop() {
     String input = "";
     static uint32_t cnt = 0; 
-    static meshsolar_cmd_t    bat_cmd = {0,};    // Initialize command structure
-    static meshsolar_status_t bat_sta = {0,};    // Initialize status structure
     cnt++;
 
     input = ""; // Reset input for new command
@@ -375,10 +395,19 @@ void loop() {
 #if 1
     if(0 == cnt % 1000) {
         //update battery total voltage
-        bat_sta.total_voltage = bq4050_rd_word(BQ4050_REG_VOLT);
+        bat_sta.total_voltage = bq4050_rd_word(BQ4050_REG_VOLT) / 1000.0f;
+
+        //update solar charge current
+        bat_sta.charge_current = bq4050_rd_word(BQ4050_REG_CURRENT);
+
+        //update relative state of charge
+        bat_sta.soc_gauge = bq4050_rd_word(BQ4050_REG_RSOC); // Convert to percentage
+
+        //update battery cell count
+        bat_sta.cell_count = bat_cmd.battery.cell_number; // Use the cell number from the command
 
         // update battery cell voltage
-        for (uint8_t i = 0; i < bat_sta.cell_count; i++) {
+        for (uint8_t i = 0; i < bat_cmd.battery.cell_number; i++) {
             bat_sta.cells[i].cell_num = i + 1;
             // Cell1=0x3F, Cell2=0x3E, Cell3=0x3D, Cell4=0x3C
             uint8_t cell_reg = BQ4050_CELL1_VOLTAGE - i;
@@ -386,11 +415,11 @@ void loop() {
             bat_sta.cells[i].voltage = cell_mv / 1000.0; // convert to V
         }
 
-        //update battery remaining capacity
-        bat_sta.learned_capacity = bq4050_rd_word(BQ4050_REG_TIME_ALARM) / 1000.0; // convert to Ah
+        //update battery learned capacity
+        bat_sta.learned_capacity = bq4050_rd_word(BQ4050_REG_FCC) / 1000.0; // convert to Ah
 
-        uint16_t cap = (bat_sta.learned_capacity  == 300) ? 1000 : bat_sta.learned_capacity; // If learned capacity is 300mAh, set it to 1000mAh
-        bq4050_wd_word(BQ4050_REG_TIME_ALARM, cap);
+        // uint16_t cap = (bat_sta.learned_capacity  == 300) ? 1000 : bat_sta.learned_capacity; // If learned capacity is 300mAh, set it to 1000mAh
+        // bq4050_wd_word(BQ4050_REG_FCC, cap);
 
 
 
@@ -400,7 +429,7 @@ void loop() {
         dbgSerial.print(bat_sta.total_voltage, 2);
         dbgSerial.println(" V");
 
-        for (uint8_t i = 0; i < bat_sta.cell_count; i++) {
+        for (uint8_t i = 0; i < bat_cmd.battery.cell_number; i++) {
             dbgSerial.print("Cell ");
             dbgSerial.print(bat_sta.cells[i].cell_num);
             dbgSerial.print(" Voltage: ");
@@ -412,49 +441,18 @@ void loop() {
         dbgSerial.print(bat_sta.learned_capacity, 2);
         dbgSerial.println(" Ah");
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-        // uint8_t fw_buf[2] = {0,};
-        // bq4050_read_fw_version();
-        // comSerial.print("BQ4050 hardware Version    :\t");
-        // for(uint8_t i = 0; i < sizeof(fw_buf); i++) {
-        //     comSerial.print(fw_buf[i], HEX);
-        // }
-        dbgSerial.println();
-        dbgSerial.println("================================");
+        dbgSerial.print("Charge Current: ");
+        dbgSerial.print(bat_sta.charge_current);
+        dbgSerial.println(" mA");
     }
 #endif
 
-
-
-
     if(0 == cnt % 1500){
-        // bat_sta.cell_count = 3; // cell count
-        // bat_sta.soc_gauge = random(0, 101); // 0~100%
-        // bat_sta.charge_current = random(0, 2001); // 0~2000 mA
-        // bat_sta.total_voltage = random(1100, 1680) / 100.0; // 11.00~16.80 V
-        // bat_sta.learned_capacity = random(40, 81) / 10.0; // 4.0~8.0 Ah
-        // for (int i = 0; i < bat_sta.cell_count; ++i) {
-        //     bat_sta.cells[i].cell_num = i + 1;
-        //     bat_sta.cells[i].temperature = random(200, 400) / 10.0; // 20.0~40.0℃
-        //     bat_sta.cells[i].voltage = random(320, 430) / 100.0; // 3.20~4.30V
-        // }
-
-
         strlcpy(bat_sta.command, "status", sizeof(bat_sta.command));
         String json = "";
         meshsolarStatusToJson(&bat_sta, json);
+        dbgSerial.print("JSON Status: ");
+        dbgSerial.println(json);
         comSerial.println(json);
     }
     delay(1);
