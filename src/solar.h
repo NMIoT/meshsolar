@@ -19,6 +19,20 @@ typedef struct {
     bool low_temp_enabled;     // Low temperature protection enabled
 } temp_protection_t;
 
+typedef struct {
+    int cell_num;         // Cell number
+    float temperature;    // Cell temperature
+    float voltage;        // Cell voltage
+} cell_status_t;
+
+
+
+
+
+
+
+
+
 // MeshSolar command structure
 typedef struct {
     char command[16];              // Command type: "config", "reset", or "switch"
@@ -26,14 +40,6 @@ typedef struct {
     temp_protection_t temperature_protection; // Temperature protection, valid only for "config" command
     bool fet_en;                   // FET switch, valid only for "switch" command
 } meshsolar_cmd_t;
-
-
-
-typedef struct {
-    int cell_num;         // Cell number
-    float temperature;    // Cell temperature
-    float voltage;        // Cell voltage
-} cell_status_t;
 
 typedef struct {
     char command[16];         // Command type, e.g. "status"
