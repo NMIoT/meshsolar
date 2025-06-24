@@ -5,6 +5,11 @@
 #include <Wire.h>
 #include "bq4050.h"
 
+
+#define dbgSerial Serial2
+#define comSerial Serial
+
+
 byte crctable[256];
 boolean printResults;
 void CalculateTable_CRC8(){
@@ -33,17 +38,17 @@ void CalculateTable_CRC8(){
     {
       if (divident % 16 == 0 && divident > 2)
       {
-        Serial.println();
+        comSerial.println();
       }
       if (currByte < 16)
-        Serial.print("0");
-      Serial.print(currByte, HEX);
-      Serial.print("\t");
+        comSerial.print("0");
+      comSerial.print(currByte, HEX);
+      comSerial.print("\t");
     }
   }
   if (printResults)
   {
-    Serial.println();
+    comSerial.println();
   }
 }
 
@@ -58,12 +63,12 @@ byte Compute_CRC8(byte *bytes, uint8_t byteLen){
     crc = (byte)(crctable[data]);
     if (printResults)
     {
-      Serial.print("byte value: ");
-      Serial.print(bytes[i], HEX);
-      Serial.print("\tlookup position: ");
-      Serial.print(data, HEX);
-      Serial.print("\tlookup value: ");
-      Serial.println(crc, HEX);
+      comSerial.print("byte value: ");
+      comSerial.print(bytes[i], HEX);
+      comSerial.print("\tlookup position: ");
+      comSerial.print(data, HEX);
+      comSerial.print("\tlookup value: ");
+      comSerial.println(crc, HEX);
     }
   }
 
@@ -76,25 +81,25 @@ byte Compute_CRC8(byte *bytes, uint8_t byteLen){
 // {"command":"status","soc_gauge": 50,"charge_current": 500,"total_voltage": 12.5,"learned_capacity": 6.6,"cells": [{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7},{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7}]}
 
 static void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
-    Serial.print("Command: ");
-    Serial.println(cmd->command);
+    comSerial.print("Command: ");
+    comSerial.println(cmd->command);
 
     if (strcmp(cmd->command, "config") == 0) {
-        Serial.println("Battery Config:");
-        Serial.print("  Type: "); Serial.println(cmd->battery.type);
-        Serial.print("  Cell Number: "); Serial.println(cmd->battery.cell_number);
-        Serial.print("  Design Capacity: "); Serial.println(cmd->battery.design_capacity);
-        Serial.print("  Cutoff Voltage: "); Serial.println(cmd->battery.cutoff_voltage);
+        comSerial.println("Battery Config:");
+        comSerial.print("  Type: "); comSerial.println(cmd->battery.type);
+        comSerial.print("  Cell Number: "); comSerial.println(cmd->battery.cell_number);
+        comSerial.print("  Design Capacity: "); comSerial.println(cmd->battery.design_capacity);
+        comSerial.print("  Cutoff Voltage: "); comSerial.println(cmd->battery.cutoff_voltage);
 
-        Serial.println("Temperature Protection:");
-        Serial.print("  High Temp (C): "); Serial.println(cmd->temperature_protection.high_temp_c);
-        Serial.print("  High Temp Enabled: "); Serial.println(cmd->temperature_protection.high_temp_enabled ? "true" : "false");
-        Serial.print("  Low Temp (C): "); Serial.println(cmd->temperature_protection.low_temp_c);
-        Serial.print("  Low Temp Enabled: "); Serial.println(cmd->temperature_protection.low_temp_enabled ? "true" : "false");
+        comSerial.println("Temperature Protection:");
+        comSerial.print("  High Temp (C): "); comSerial.println(cmd->temperature_protection.high_temp_c);
+        comSerial.print("  High Temp Enabled: "); comSerial.println(cmd->temperature_protection.high_temp_enabled ? "true" : "false");
+        comSerial.print("  Low Temp (C): "); comSerial.println(cmd->temperature_protection.low_temp_c);
+        comSerial.print("  Low Temp Enabled: "); comSerial.println(cmd->temperature_protection.low_temp_enabled ? "true" : "false");
     }
     if (strcmp(cmd->command, "switch") == 0) {
-        Serial.print("FET Switch: ");
-        Serial.println(cmd->fet_en ? "ON" : "OFF");
+        comSerial.print("FET Switch: ");
+        comSerial.println(cmd->fet_en ? "ON" : "OFF");
     }
 }
 
@@ -102,8 +107,8 @@ static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, json);
     if (error) {
-        Serial.print("Parse failed: ");
-        Serial.println(error.c_str());
+        comSerial.print("Parse failed: ");
+        comSerial.println(error.c_str());
         return false;
     }
 
@@ -111,14 +116,14 @@ static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
     memset(cmd, 0, sizeof(meshsolar_cmd_t));
 
     if (!doc.containsKey("command")) {
-        Serial.println("Missing 'command' field");
+        comSerial.println("Missing 'command' field");
         return false;
     }
     strlcpy(cmd->command, doc["command"] | "", sizeof(cmd->command));
 
     if (strcmp(cmd->command, "config") == 0) {
         if (!doc.containsKey("battery") || !doc.containsKey("temperature_protection")) {
-            Serial.println("Missing 'battery' or 'temperature_protection' field for 'config' command");
+            comSerial.println("Missing 'battery' or 'temperature_protection' field for 'config' command");
             return false;
         }
         JsonObject battery = doc["battery"];
@@ -131,7 +136,7 @@ static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
             !tp.containsKey("high_temp_enabled") ||
             !tp.containsKey("low_temp_c") ||
             !tp.containsKey("low_temp_enabled")) {
-            Serial.println("Missing fields in 'battery' or 'temperature_protection'");
+            comSerial.println("Missing fields in 'battery' or 'temperature_protection'");
             return false;
         }
         strlcpy(cmd->battery.type, battery["type"] | "", sizeof(cmd->battery.type));
@@ -145,14 +150,14 @@ static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
         cmd->temperature_protection.low_temp_enabled = tp["low_temp_enabled"] | false;
     } else if (strcmp(cmd->command, "switch") == 0) {
         if (!doc.containsKey("fet_en")) {
-            Serial.println("Missing 'fet_en' field for 'switch' command");
+            comSerial.println("Missing 'fet_en' field for 'switch' command");
             return false;
         }
         cmd->fet_en = doc["fet_en"] | false;
     } else if (strcmp(cmd->command, "reset") == 0) {
 
     } else {
-        Serial.println("Unknown command");
+        comSerial.println("Unknown command");
         return false;
     }
 
@@ -160,8 +165,8 @@ static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
 }
 
 static bool listenString(String& input, char terminator = '\n') {
-    while (Serial.available() > 0) {
-        char c = Serial.read();
+    while (comSerial.available() > 0) {
+        char c = comSerial.read();
         if (c == terminator) {
             return true; // End of input
         } else {
@@ -215,9 +220,9 @@ void bq4050_wd_word(uint8_t reg, uint16_t value){
   delay(10); // Wait for the device to process the command
   if (result != 0)
   {
-    Serial.print("Write to register 0x");
-    Serial.print(reg, HEX);
-    Serial.println(" failed.");
+    comSerial.print("Write to register 0x");
+    comSerial.print(reg, HEX);
+    comSerial.println(" failed.");
   }
 }
 
@@ -245,20 +250,20 @@ bool writeBQ4050BlockCommand(uint16_t cmd) {
 //     delay(10); 
 //     uint8_t count = Wire.requestFrom(BQ4050addr, len); // [Count][Data...][PEC]
 //     if(count != len) {
-//         Serial.println("Not enough data available from BQ4050!");
+//         comSerial.println("Not enough data available from BQ4050!");
 //         return false;
 //     }
 
 //     uint8_t block_len = Wire.read(); // 第一个字节是数据长度
 
-//     Serial.print("Block Length: ");
-//     Serial.println(block_len);
+//     comSerial.print("Block Length: ");
+//     comSerial.println(block_len);
 
 //     for (uint8_t i = 0; i < len; i++) {
 //         buf[i] = Wire.read();
-//         if (buf[i] < 0x10) Serial.print("0");
-//         Serial.print(buf[i], HEX);
-//         Serial.print(" ");
+//         if (buf[i] < 0x10) comSerial.print("0");
+//         comSerial.print(buf[i], HEX);
+//         comSerial.print(" ");
 //     }
 //     // Wire.read(); // 读PEC字节（可选校验）
 //     return true;
@@ -276,23 +281,23 @@ bool readBQ4050BlockData() {
     // 2. 发送读地址 + 请求数据（含字节计数）
     uint8_t count = Wire.requestFrom(BQ4050addr, (uint8_t)32); // 请求最大可能长度
     if (count == 0) {
-        Serial.println("No data received!");
+        comSerial.println("No data received!");
         return false;
     }
 
     // 3. 读取字节计数（第一个字节）
     uint8_t block_len = Wire.read();
     if (block_len > sizeof(buf)) {
-        Serial.println("Data too long for buffer!");
+        comSerial.println("Data too long for buffer!");
         return false;
     }
 
     // 4. 读取后续数据（根据block_len）
     for (uint8_t i = 0; i < block_len + 1; i++) {
         buf[i] = Wire.read();
-        Serial.print(buf[i] < 0x10 ? "0" : "");
-        Serial.print(buf[i], HEX);
-        Serial.print(" ");
+        comSerial.print(buf[i] < 0x10 ? "0" : "");
+        comSerial.print(buf[i], HEX);
+        comSerial.print(" ");
     }
 
     // 5. 可选：读取PEC校验字节
@@ -307,34 +312,34 @@ bool readBQ4050BlockData() {
 // 读取固件版本号
 bool bq4050_read_fw_version() {
     if (!writeBQ4050BlockCommand(MAC_CMD_HW_VER)) {
-        Serial.println("Write MAC_CMD_HW_VER failed!");
+        comSerial.println("Write MAC_CMD_HW_VER failed!");
         return false;
     }
     if (!readBQ4050BlockData()) {
-        Serial.println("Read HW version failed!");
+        comSerial.println("Read HW version failed!");
         return false;
     }
 
-    // Serial.print("BQ4050 HW Version Block: ");
+    // comSerial.print("BQ4050 HW Version Block: ");
     // for (uint8_t i = 0; i < fw_len; i++) {
-    //     Serial.print(fw_buf[i], HEX);
-    //     Serial.print(" ");
+    //     comSerial.print(fw_buf[i], HEX);
+    //     comSerial.print(" ");
     // }
-    // Serial.println();
+    // comSerial.println();
     return true;
 }
 
 
 void setup() {
-    Serial.begin(115200); 
+    comSerial.begin(115200); 
     time_t timeout = millis();
-    while (!Serial){
+    while (!comSerial){
         if ((millis() - timeout) < 10000){
         delay(100);
         }
     }
-
-
+    dbgSerial.begin(115200); // For debugging, if needed
+    dbgSerial.setPins(PIN_SERIAL2_RX, PIN_SERIAL2_TX);
 
 
     Wire.setPins(SDA_PIN, SCL_PIN);
@@ -344,11 +349,10 @@ void setup() {
     delay(1000);
 
     
-    Serial.println("================================");
-    Serial.println("     MeshTower BQ4050 example   ");
-    Serial.println("================================");
-    Serial.begin(115200);
-    Serial.println("Please input JSON string and end with newline:");
+    dbgSerial.println("================================");
+    dbgSerial.println("     MeshTower BQ4050 example   ");
+    dbgSerial.println("================================");
+    dbgSerial.println("Please input JSON string and end with newline:");
 }
 
 
@@ -361,8 +365,8 @@ void loop() {
 
     input = ""; // Reset input for new command
     if(listenString(input, '\n')) {
-        Serial.print("Received command: ");
-        Serial.println(input);
+        comSerial.print("Received command: ");
+        comSerial.println(input);
         bool res = parseJsonCommand(input.c_str(), &cmd);
         if (res) {
             printMeshsolarCmd(&cmd);
@@ -372,54 +376,54 @@ void loop() {
 
 
         } else {
-            Serial.println("Failed to parse command");
+            comSerial.println("Failed to parse command");
         }
     }
 
 #if 0
     if(0 == cnt % 1000) {
         uint16_t voltage = bq4050_rd_word(BQ4050_REG_VOLT);
-        Serial.print("Voltage                    :\t");
-        Serial.print(voltage);
-        Serial.println("\tmV");
+        comSerial.print("Voltage                    :\t");
+        comSerial.print(voltage);
+        comSerial.println("\tmV");
 
         uint16_t Vcell1 = bq4050_rd_word(BQ4050_CELL1_VOLTAGE);
-        Serial.print("Cell 1 Voltage             :\t");
-        Serial.print(Vcell1);
-        Serial.println("\tmV");
+        comSerial.print("Cell 1 Voltage             :\t");
+        comSerial.print(Vcell1);
+        comSerial.println("\tmV");
 
         uint16_t Vcell2 = bq4050_rd_word(BQ4050_CELL2_VOLTAGE);
-        Serial.print("Cell 2 Voltage             :\t");
-        Serial.print(Vcell2);
-        Serial.println("\tmV");
+        comSerial.print("Cell 2 Voltage             :\t");
+        comSerial.print(Vcell2);
+        comSerial.println("\tmV");
 
         uint16_t Vcell3 = bq4050_rd_word(BQ4050_CELL3_VOLTAGE);
-        Serial.print("Cell 3 Voltage             :\t");
-        Serial.print(Vcell3);
-        Serial.println("\tmV");
+        comSerial.print("Cell 3 Voltage             :\t");
+        comSerial.print(Vcell3);
+        comSerial.println("\tmV");
 
         uint16_t Vcell4 = bq4050_rd_word(BQ4050_CELL4_VOLTAGE);
-        Serial.print("Cell 4 Voltage             :\t");
-        Serial.print(Vcell4);
-        Serial.println("\tmV");
+        comSerial.print("Cell 4 Voltage             :\t");
+        comSerial.print(Vcell4);
+        comSerial.println("\tmV");
 
         uint16_t remainingCapacity = bq4050_rd_word(BQ4050_REG_TIME_ALARM);
-        Serial.print("Remaining Capacity         :\t");
-        Serial.print(remainingCapacity);
-        Serial.println("\tmAh");
+        comSerial.print("Remaining Capacity         :\t");
+        comSerial.print(remainingCapacity);
+        comSerial.println("\tmAh");
 
         uint16_t fcc = bq4050_rd_word(BQ4050_REG_FCC);
-        Serial.print("Full Charge Capacity       :\t");
-        Serial.print(fcc);
-        Serial.println("\tmAh");
+        comSerial.print("Full Charge Capacity       :\t");
+        comSerial.print(fcc);
+        comSerial.println("\tmAh");
 
 
         if(remainingCapacity == 300){
-            // Serial.println("Remaining Capacity is 300mAh, setting it to 1000mAh");
+            // comSerial.println("Remaining Capacity is 300mAh, setting it to 1000mAh");
             bq4050_wd_word(BQ4050_REG_TIME_ALARM, 1000);
         }
         else{
-            // Serial.println("Remaining Capacity is not 300mAh, no need to set it");
+            // comSerial.println("Remaining Capacity is not 300mAh, no need to set it");
             bq4050_wd_word(BQ4050_REG_TIME_ALARM, 300);
         }
 
@@ -427,12 +431,12 @@ void loop() {
 
         // uint8_t fw_buf[2] = {0,};
         bq4050_read_fw_version();
-        // Serial.print("BQ4050 hardware Version    :\t");
+        // comSerial.print("BQ4050 hardware Version    :\t");
         // for(uint8_t i = 0; i < sizeof(fw_buf); i++) {
-        //     Serial.print(fw_buf[i], HEX);
+        //     comSerial.print(fw_buf[i], HEX);
         // }
-        Serial.println();
-        Serial.println("================================");
+        comSerial.println();
+        comSerial.println("================================");
     }
 #endif
 
@@ -440,11 +444,7 @@ void loop() {
 
 
     if(0 == cnt % 1500){
-
-        Serial.println("test...");
-
-
-
+        dbgSerial.println(cnt);    
 
         bat_status.cell_count = 4; // cell count
         bat_status.soc_gauge = random(0, 101); // 0~100%
@@ -459,7 +459,7 @@ void loop() {
         strlcpy(bat_status.command, "status", sizeof(bat_status.command));
         String json = "";
         meshsolarStatusToJson(&bat_status, json);
-        Serial.println(json);
+        dbgSerial.println(json);
     }
     delay(1);
 }
