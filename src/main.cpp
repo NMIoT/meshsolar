@@ -203,15 +203,15 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     doc["soc_gauge"] = status->soc_gauge;
     doc["charge_current"] = status->charge_current;
     // 保留2位小数
-    doc["total_voltage"] = String(status->total_voltage, 2);
-    doc["learned_capacity"] = String(status->learned_capacity, 2);
+    doc["total_voltage"] = String(status->total_voltage, 3);
+    doc["learned_capacity"] = String(status->learned_capacity, 3);
 
     JsonArray cells = doc.createNestedArray("cells");
     for (int i = 0; i < status->cell_count; ++i) {
         JsonObject cell = cells.createNestedObject();
         cell["cell_num"] = status->cells[i].cell_num;
         cell["temperature"] = String(status->cells[i].temperature, 2);
-        cell["voltage"] = String(status->cells[i].voltage, 2);
+        cell["voltage"] = String(status->cells[i].voltage, 0);
     }
 
     output = "";
@@ -292,43 +292,44 @@ void bq4050_wd_word(uint8_t reg, uint16_t value){
 
 
 bool readBQ4050BlockData(byte regAddress, byte *dataVal, uint8_t arrLen ) {
-    // 1. 发送写地址 + 命令码（BLOCK_ACCESS_CMD）
+    uint8_t buf[32] = {
+        BQ4050addr<<1,     
+        BLOCK_ACCESS_CMD, 
+        (BQ4050addr<<1) + 1,
+    };
+
     Wire.beginTransmission(BQ4050addr);
     Wire.write(BLOCK_ACCESS_CMD);
-
-    bool end = Wire.endTransmission(false); 
-    // dbgSerial.print("End Transmission: ");
-    // dbgSerial.println(end);
-
-    // 2. 发送读地址 + 请求数据（含字节计数）
-    Wire.requestFrom(BQ4050addr, arrLen); // 请求最大可能长度
-
-    // 3. 读取字节计数（第一个字节）
-    uint8_t block_len = Wire.read();
-    dbgSerial.print("Block Length: ");
-    dbgSerial.println(block_len);
-
-    // 4. 读取后续数据（根据block_len）
-    for (uint8_t i = 0; i < block_len; i++) {
-        dataVal[i] = Wire.read();
-        dbgSerial.print(dataVal[i] < 0x10 ? "0" : "");
-        dbgSerial.print(dataVal[i], HEX);
-        dbgSerial.print(" ");
+    Wire.endTransmission(false); 
+    Wire.requestFrom(BQ4050addr, arrLen + 2); // send start signal
+    uint32_t start = millis();
+    while (Wire.available() < 1) {
+        if (millis() - start > 500) return false; // 100ms超时
     }
-    dbgSerial.println();
 
-    // 5. 可选：读取PEC校验字节
+    // data len, pec not included
+    buf[3] = Wire.read(); // data length
+    if (buf[3] > 32) return false; // avoid buffer overflow
+
+    for (uint8_t i = 0; i < buf[3]; i++) {
+        if (Wire.available()) buf[i + 4] = Wire.read();
+        else return false; 
+    }
+
+    uint8_t PECcheck = Compute_CRC8(buf, buf[3] + 4); // Calculate PEC for the received data
+
     if (Wire.available()) {
         uint8_t pec = Wire.read();
-        dbgSerial.print("PEC: ");
-        dbgSerial.println(pec, HEX);
+        if(PECcheck == pec) {
+            for (uint8_t i = 0; i < buf[3]; i++) {
+                dataVal[i] = buf[i + 4];
+            }
+        }
+
+        return (PECcheck == pec); // Compare calculated PEC with received PEC
     }
-    return true;
+    return false; // If PEC does not match, return false
 }
-
-
-
-
 
 bool writeMACommand(uint16_t regAddress){
     //for simplicity, we create an array to hold all the byte we will be sending
@@ -343,15 +344,12 @@ bool writeMACommand(uint16_t regAddress){
     //The arrSize var is static, so there are always 5 bytes to be sent
     uint8_t PECcheck = Compute_CRC8( byteArr, sizeof(byteArr) );
 
-    // dbgSerial.print("PEC Check: 0x");
-    // dbgSerial.println(PECcheck, HEX);
-
     Wire.beginTransmission(BQ4050addr);
     //MAC access
     Wire.write( BLOCK_ACCESS_CMD );
     //number of bytes in to be sent. In when sending a command, this is always 2
     Wire.write( 0x02 );
-    // delay(10);
+    // delay(1);
     //little endian of address
     Wire.write( regAddress&0xFF );
     Wire.write((regAddress>>8)&0xFF );
@@ -362,60 +360,39 @@ bool writeMACommand(uint16_t regAddress){
 }
 
 
-bool readDataReg(byte regAddress, byte *dataVal, uint8_t len ){
-  uint8_t buf[16] = {0,};
-
-  //Add in the device address to the buffer
-  Wire.beginTransmission( BQ4050addr );
-  //Add the one byte register address
-  Wire.write( regAddress );
-  //Send out buffer and log response
-  byte ack = Wire.endTransmission();
-  //If data is ackowledged, proceed
-  if( ack == 0 ){
-    //Request a number of bytes from the device address
-    Wire.requestFrom( BQ4050addr , (int16_t) len );
-    //If there is data in the in buffer
-    if( Wire.available() > 0 ){
-      //Cycle through, loading data into array
-      for( uint8_t i = 0; i < len; i++ ){
-        dataVal[i] = Wire.read();
-      }
-    }
-    return true;
-  }else{
-    return false; //if I2C comm fails
-  }
-
-}
-
-
-// 读取固件版本号
 bool bq4050_read_fw_version() {
-    uint8_t data[16] = {0,};
+    uint8_t data[4] = {0,};
     if (!writeMACommand(MAC_CMD_HW_VER)) {
-        dbgSerial.println("Write MAC CMD failed!");
+        // dbgSerial.println("Write MAC CMD failed!");
         return false;
     }
-    delay(10);
+    delay(18);
     if (!readBQ4050BlockData(MAC_CMD_HW_VER, data, sizeof(data))) {
-        dbgSerial.println("Read MAC CMD  failed!");
+        // dbgSerial.println("Read MAC CMD  failed!");
         return false;
     }
+
+    for(uint8_t i = 0; i < sizeof(data); i++) {
+        if (data[i] < 0x10) {
+            dbgSerial.print("0");
+        }
+        dbgSerial.print(data[i], HEX);
+        if (i < sizeof(data) - 1) {
+            dbgSerial.print(" ");
+        }
+    }
+    dbgSerial.println();
+
+
+
     return true;
 }
-
-
-
-
-
-
 
 
 
 
 void setup() {
-#if 0
+#if 1
     comSerial.begin(115200); 
     time_t timeout = millis();
     while (!comSerial){
@@ -459,12 +436,24 @@ void loop() {
 #if 0
     if(0 == cnt % 1000) {
 
-        // bq4050_read_fw_version();
+        // uint16_t value = 0;
+        // if(bq4050_rd_word_with_pec(BQ4050_REG_VOLT, &value)) bat_sta.total_voltage = value / 1000.0f; 
+        // dbgSerial.print("Battery Total Voltage: ");
+        // dbgSerial.print(bat_sta.total_voltage, 2);
+
+
+        while(!bq4050_read_fw_version());
+
+
+        // comSerial.println(cnt);
+
+
         // // uint8_t arr[] = {0x16,0x44,0x02,0x03,0x00};   //pec = 0x53 ok
         // // uint8_t arr[] = {0x16,0x44,0x02,0x02,0x00};   //pec = 0x46 ok
-        // uint8_t arr[] = {0x16, 0x0e};  //
+        // uint8_t arr[] = {0x16, 0x44, 0x17, 0x04, 0x03, 0x00, 0x01,0x00};   //pec = 0x8C ok
+        // uint8_t arr[] = {0x16, 0x44, 0x17, 0x0D, 0x02, 0x00, 0x9e, 0x34, 0x00, 0x01, 0x00, 0x16, 0x00, 0x00, 0x00, 0x02, 0x00};   //pec =  0xE2 ok
         // uint8_t pec = Compute_CRC8(arr, sizeof(arr));
-        // dbgSerial.print("PEC Check: 0x");
+        // dbgSerial.print("PEC Test Check: 0x");
         // dbgSerial.println(pec, HEX);
 
 
@@ -478,18 +467,11 @@ void loop() {
         // }
 
 
-        uint16_t value = 0;
-        value = bq4050_rd_word(BQ4050_REG_RSOC);
-        dbgSerial.println("================================");
-        dbgSerial.print("BQ4050_REG_RSOC: ");
-        dbgSerial.println(value);
-
-
-
-
-
-
-
+        // uint16_t value = 0;
+        // value = bq4050_rd_word(BQ4050_REG_RSOC);
+        // dbgSerial.println("================================");
+        // dbgSerial.print("BQ4050_REG_RSOC: ");
+        // dbgSerial.println(value);
 
         // dbgSerial.println(cnt);
     }
@@ -552,17 +534,18 @@ void loop() {
 
 
 
-#if 1 //pec
+#if 0 //pec
     if(0 == cnt % 1000) {
         uint16_t value = 0;
 
         //update battery total voltage
-        if(bq4050_rd_word_with_pec(BQ4050_REG_VOLT, &value)) bat_sta.total_voltage = value; 
+        if(bq4050_rd_word_with_pec(BQ4050_REG_VOLT, &value)) bat_sta.total_voltage = value / 1000.0f; 
         delay(10); 
 
         value = 0; // Reset value for next read
         //update solar charge current
         if(bq4050_rd_word_with_pec(BQ4050_REG_CURRENT, &value)) bat_sta.charge_current = (int16_t)value; 
+        bat_sta.charge_current = bat_sta.charge_current < 0 ? 0 : bat_sta.charge_current; // Ensure positive value
         delay(10); 
         
         value = 0; // Reset value for next read
@@ -588,7 +571,7 @@ void loop() {
         }
         
         //update battery learned capacity
-        if(bq4050_rd_word_with_pec(BQ4050_REG_FCC, &value)) bat_sta.learned_capacity = value; 
+        if(bq4050_rd_word_with_pec(BQ4050_REG_FCC, &value)) bat_sta.learned_capacity = value/1000.0f; 
 
         delay(10); 
 
@@ -622,7 +605,7 @@ void loop() {
 #endif
 
 
-#if 0
+#if 1
     if(0 == cnt % 1500){
         strlcpy(bat_sta.command, "status", sizeof(bat_sta.command));
         String json = "";
@@ -635,88 +618,3 @@ void loop() {
 
     delay(1);
 }
-
-
-
-
-#include <Lorro_BQ4050.h>
-
-//Initialise the device and library
-Lorro_BQ4050 BQ4050( BQ4050addr );
-//Instantiate the structs
-extern Lorro_BQ4050::Regt registers;
-uint32_t previousMillis;
-uint16_t loopInterval = 1000;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// void loop() {
-
-//   uint32_t currentMillis = millis();
-
-//   if( currentMillis - previousMillis > loopInterval ){
-//     previousMillis = currentMillis;
-
-//     // Lorro_BQ4050::Regt registers;
-//     BQ4050.readReg( registers.relativeStateOfCharge );
-//     dbgSerial.print( "State of charge: " );
-//     dbgSerial.print( registers.relativeStateOfCharge.val );
-//     dbgSerial.println( "%" );
-//     delay( 15 );
-
-//     BQ4050.readReg( registers.voltage );
-//     dbgSerial.print( "Pack voltage: " );
-//     dbgSerial.print( registers.voltage.val );
-//     dbgSerial.println( "mV" );
-//     delay( 15 );
-
-//     BQ4050.readReg( registers.cellVoltage1 );
-//     dbgSerial.print( "Cell voltage 1: " );
-//     dbgSerial.print( registers.cellVoltage1.val );
-//     dbgSerial.println( "mV" );
-//     delay( 15 );
-
-//     BQ4050.readReg( registers.cellVoltage2 );
-//     dbgSerial.print( "Cell voltage 2: " );
-//     dbgSerial.print( registers.cellVoltage2.val );
-//     dbgSerial.println( "mV" );
-//     delay( 15 );
-
-//     BQ4050.readReg( registers.cellVoltage3 );
-//     dbgSerial.print( "Cell voltage 3: " );
-//     dbgSerial.print( registers.cellVoltage3.val );
-//     dbgSerial.println( "mV" );
-//     delay( 15 );
-
-//     BQ4050.readReg( registers.cellVoltage4 );
-//     dbgSerial.print( "Cell voltage 4: " );
-//     dbgSerial.print( registers.cellVoltage4.val );
-//     dbgSerial.println( "mV" );
-//     delay( 15 );
-
-//     BQ4050.readReg( registers.current );
-//     dbgSerial.print( "Current: " );
-//     dbgSerial.print( registers.current.val );
-//     dbgSerial.println( "mA" );
-//     delay( 15 );
-
-//     // BQ4050.getHWversion();
-
-
-
-//   }
-
-// }
-
