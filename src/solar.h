@@ -44,7 +44,7 @@ typedef struct {
 typedef struct {
     char command[16];         // Command type, e.g. "status"
     int soc_gauge;            // State of charge (%)
-    int charge_current;       // Charge current (mA)
+    int16_t charge_current;       // Charge current (mA)
     float total_voltage;      // Total voltage (V)
     float learned_capacity;   // Learned capacity (Ah)
     cell_status_t cells[8];   // Array for cell status (adjust size as needed)
