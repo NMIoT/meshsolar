@@ -26,7 +26,7 @@ static meshsolar_cmd_t bat_cmd = {
     "", // command
     {   // battery
         "LiFePO4", // type
-        2,         // cell_number
+        3,         // cell_number
         3200,      // design_capacity
         2800       // cutoff_voltage
     },
@@ -465,6 +465,13 @@ bool bq4050_read_cell_temp(DAStatus2_t *temp) {
     return true;
 }
 
+bool bq4050_fet_control(){
+    if(writeMACommand(MAC_CMD_FET_CONTROL)) {
+        delay(500); // Wait for the device to process the command
+        return true; // Return true if command was sent successfully
+    }
+    return false; // Return false if there was an error sending the command
+}
 
 
 bool bq4050_reset(){
@@ -512,6 +519,7 @@ void loop() {
             else if (0 == strcmp(bat_cmd.command, "switch")) {
                 dbgSerial.print("FET Switch: ");
                 dbgSerial.println(bat_cmd.fet_en ? "ON" : "OFF");
+                bq4050_fet_control();
             }
             else if (0 == strcmp(bat_cmd.command, "reset")) {
                 bq4050_reset();
@@ -559,8 +567,6 @@ void loop() {
 
         dbgSerial.print("fet temp: ");
         dbgSerial.println(temp.fet_temp/10.0f - 273.15f);
-
-
     }
 #endif
 

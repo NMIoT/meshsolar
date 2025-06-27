@@ -37,9 +37,11 @@
 
 #define MAC_CMD_FW_VER              0x0002
 #define MAC_CMD_HW_VER              0x0003
+#define MAC_CMD_FET_CONTROL         0x0022
 #define MAC_CMD_DEV_RESET           0x0041
 #define MAC_CMD_SECURITY_KEYS       0x0035
 #define MAC_CMD_DA_STATUS2          0x0072
+
 
 
 
