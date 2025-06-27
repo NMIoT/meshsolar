@@ -2,7 +2,8 @@
 #include "Adafruit_TinyUSB.h"
 #include <ArduinoJson.h>
 #include "solar.h"
-#include <Wire.h>
+// #include <Wire.h>
+#include "SoftwareWire.h"
 #include "bq4050.h"
 
 
@@ -10,8 +11,10 @@
 #define comSerial Serial
 
 
-extern byte crctable[256];
-extern boolean printResults;
+SoftwareWire Wire( g_ADigitalPinMap[SDA_PIN], g_ADigitalPinMap[SCL_PIN]);
+
+byte crctable[256];
+boolean printResults;
 
 // {"command":"config","battery":{"type":"LiFePO4","cell_number":4,"design_capacity":3200,"cutoff_voltage":2800},"temperature_protection":{"high_temp_c":60,"high_temp_enabled":true,"low_temp_c":-10,"low_temp_enabled":true}}
 
@@ -402,8 +405,8 @@ void setup() {
     }
 #endif
     dbgSerial.begin(115200);        // For debugging, if needed
-    Wire.setPins(SDA_PIN, SCL_PIN);
-    Wire.setClock(100000);
+    // Wire.setPins(SDA_PIN, SCL_PIN);
+    // Wire.setClock(100000);
     Wire.begin(); 
     CalculateTable_CRC8();
 }
@@ -433,7 +436,7 @@ void loop() {
     }
 
 
-#if 0
+#if 1
     if(0 == cnt % 1000) {
 
         // uint16_t value = 0;
@@ -442,7 +445,14 @@ void loop() {
         // dbgSerial.print(bat_sta.total_voltage, 2);
 
 
-        while(!bq4050_read_fw_version());
+        // while(!bq4050_read_fw_version());
+
+
+
+        bq4050_read_fw_version();
+
+
+
 
 
         // comSerial.println(cnt);
@@ -586,8 +596,8 @@ void loop() {
             dbgSerial.print("Cell ");
             dbgSerial.print(bat_sta.cells[i].cell_num);
             dbgSerial.print(" Voltage: ");
-            dbgSerial.print(bat_sta.cells[i].voltage, 1);
-            dbgSerial.println(" mV");
+            dbgSerial.print(bat_sta.cells[i].voltage, 3);
+            dbgSerial.println(" V");
         }
 
         dbgSerial.print("Learned Capacity: ");
