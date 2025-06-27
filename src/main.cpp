@@ -105,25 +105,29 @@ byte Compute_CRC8(byte *bytes, uint8_t byteLen){
 }
 
 static void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
-    dbgSerial.print("Command: ");
-    dbgSerial.println(cmd->command);
-
     if (strcmp(cmd->command, "config") == 0) {
         dbgSerial.println("Battery Config:");
-        dbgSerial.print("  Type: "); dbgSerial.println(cmd->battery.type);
-        dbgSerial.print("  Cell Number: "); dbgSerial.println(cmd->battery.cell_number);
-        dbgSerial.print("  Design Capacity: "); dbgSerial.println(cmd->battery.design_capacity);
-        dbgSerial.print("  Cutoff Voltage: "); dbgSerial.println(cmd->battery.cutoff_voltage);
+        dbgSerial.print("       Type: "); dbgSerial.println(cmd->battery.type);
+        dbgSerial.print("       Cell Number: "); dbgSerial.println(cmd->battery.cell_number);
+        dbgSerial.print("       Design Capacity: "); dbgSerial.println(cmd->battery.design_capacity);
+        dbgSerial.print("       Cutoff Voltage: "); dbgSerial.println(cmd->battery.cutoff_voltage);
 
         dbgSerial.println("Temperature Protection:");
-        dbgSerial.print("  High Temp (C): "); dbgSerial.println(cmd->temperature_protection.high_temp_c);
-        dbgSerial.print("  High Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.high_temp_enabled ? "true" : "false");
-        dbgSerial.print("  Low Temp (C): "); dbgSerial.println(cmd->temperature_protection.low_temp_c);
-        dbgSerial.print("  Low Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.low_temp_enabled ? "true" : "false");
+        dbgSerial.print("       High Temp (C): "); dbgSerial.println(cmd->temperature_protection.high_temp_c);
+        dbgSerial.print("       High Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.high_temp_enabled ? "true" : "false");
+        dbgSerial.print("       Low Temp (C): "); dbgSerial.println(cmd->temperature_protection.low_temp_c);
+        dbgSerial.print("       Low Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.low_temp_enabled ? "true" : "false");
     }
-    if (strcmp(cmd->command, "switch") == 0) {
+    else if (strcmp(cmd->command, "switch") == 0) {
         dbgSerial.print("FET Switch: ");
         dbgSerial.println(cmd->fet_en ? "ON" : "OFF");
+    }
+    else if (strcmp(cmd->command, "reset") == 0) {
+        dbgSerial.println("Device Reset Command Received");
+    }
+    else{
+        dbgSerial.print("Unknown command: ");
+        dbgSerial.println(cmd->command);
     }
 }
 
@@ -206,15 +210,15 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     doc["soc_gauge"] = status->soc_gauge;
     doc["charge_current"] = status->charge_current;
     // 保留2位小数
-    doc["total_voltage"] = String(status->total_voltage, 3);
+    doc["total_voltage"] = String(status->total_voltage, 1);
     doc["learned_capacity"] = String(status->learned_capacity, 3);
 
     JsonArray cells = doc.createNestedArray("cells");
     for (int i = 0; i < status->cell_count; ++i) {
         JsonObject cell = cells.createNestedObject();
         cell["cell_num"] = status->cells[i].cell_num;
-        cell["temperature"] = String(status->cells[i].temperature, 2);
-        cell["voltage"] = String(status->cells[i].voltage, 0);
+        cell["temperature"] = String(status->cells[i].temperature, 2) + "C";
+        cell["voltage"] = String(status->cells[i].voltage/1000.0f, 3) + "V";
     }
 
     output = "";
@@ -276,8 +280,6 @@ bool bq4050_rd_word_with_pec(uint8_t reg, uint16_t *value){
 }
 
 
-
-
 void bq4050_wd_word(uint8_t reg, uint16_t value){
   Wire.beginTransmission(BQ4050addr);
   Wire.write(reg);
@@ -307,16 +309,32 @@ bool readBQ4050BlockData(byte regAddress, byte *dataVal, uint8_t arrLen ) {
     Wire.requestFrom(BQ4050addr, arrLen + 2); // send start signal
     uint32_t start = millis();
     while (Wire.available() < 1) {
-        if (millis() - start > 500) return false; // 100ms超时
+        if (millis() - start > 500){
+            dbgSerial.println("SMBus read timeout!");
+            return false; 
+        }
     }
 
     // data len, pec not included
     buf[3] = Wire.read(); // data length
-    if (buf[3] > 32) return false; // avoid buffer overflow
+    if (buf[3] > 32) {
+        dbgSerial.println("Block data length exceeds 32 bytes, invalid data.");
+        return false; // avoid buffer overflow
+    }
+    // dbgSerial.print("SMBus block data length: ");
+    // dbgSerial.println(buf[3]);
+
+
+
 
     for (uint8_t i = 0; i < buf[3]; i++) {
-        if (Wire.available()) buf[i + 4] = Wire.read();
-        else return false; 
+        if (Wire.available()) {
+            buf[i + 4] = Wire.read();
+        }
+        else {
+            dbgSerial.println("Block data read error, not enough data available.");
+            return false; 
+        }
     }
 
     uint8_t PECcheck = Compute_CRC8(buf, buf[3] + 4); // Calculate PEC for the received data
@@ -328,11 +346,12 @@ bool readBQ4050BlockData(byte regAddress, byte *dataVal, uint8_t arrLen ) {
                 dataVal[i] = buf[i + 4];
             }
         }
-
         return (PECcheck == pec); // Compare calculated PEC with received PEC
     }
+    dbgSerial.println("Block data read error, no PEC byte received.");
     return false; // If PEC does not match, return false
 }
+
 
 bool writeMACommand(uint16_t regAddress){
     //for simplicity, we create an array to hold all the byte we will be sending
@@ -363,15 +382,15 @@ bool writeMACommand(uint16_t regAddress){
 }
 
 
-bool bq4050_read_fw_version() {
-    uint8_t data[4] = {0,};
+bool bq4050_read_hw_version() {
+    uint8_t data[2] = {0,};// 2 bytes for hardware version + 1 byte for data length + 1 byte for PEC
     if (!writeMACommand(MAC_CMD_HW_VER)) {
-        // dbgSerial.println("Write MAC CMD failed!");
+        dbgSerial.println("Write MAC CMD HW failed!");
         return false;
     }
     delay(18);
     if (!readBQ4050BlockData(MAC_CMD_HW_VER, data, sizeof(data))) {
-        // dbgSerial.println("Read MAC CMD  failed!");
+        dbgSerial.println("Read MAC CMD HW failed!");
         return false;
     }
 
@@ -392,6 +411,69 @@ bool bq4050_read_fw_version() {
 }
 
 
+bool bq4050_read_fw_version() {
+    uint8_t data[11 + 2] = {0,}; // 11 bytes for firmware version + 1 byte for data length + 1 byte for PEC
+    if (!writeMACommand(MAC_CMD_FW_VER)) {
+        dbgSerial.println("Write MAC CMD FW failed!");
+        return false;
+    }
+    delay(18);
+    if (!readBQ4050BlockData(MAC_CMD_FW_VER, data, sizeof(data))) {
+        dbgSerial.println("Read MAC CMD FW failed!");
+        return false;
+    }
+
+    for(uint8_t i = 0; i < sizeof(data); i++) {
+        if (data[i] < 0x10) {
+            dbgSerial.print("0");
+        }
+        dbgSerial.print(data[i], HEX);
+        if (i < sizeof(data) - 1) {
+            dbgSerial.print(" ");
+        }
+    }
+    dbgSerial.println();
+
+    return true;
+}
+
+bool bq4050_read_cell_temp(DAStatus2_t *temp) {
+    uint8_t data[14 + 2] = {0,};// 14 bytes for cell temperatures + 1 bytes for data length + 1 byte for PEC
+    if (!writeMACommand(MAC_CMD_DA_STATUS2)) {
+        dbgSerial.println("Write cell temp failed!");
+        return false;
+    }
+    delay(18);
+    if (!readBQ4050BlockData(MAC_CMD_DA_STATUS2, data, sizeof(data))) {
+        dbgSerial.println("Read cell temp  failed!");
+        return false;
+    }
+
+    // for(uint8_t i = 0; i < sizeof(data); i++) {
+    //     if (data[i] < 0x10) {
+    //         dbgSerial.print("0");
+    //     }
+    //     dbgSerial.print(data[i], HEX);
+    //     if (i < sizeof(data) - 1) {
+    //         dbgSerial.print(" ");
+    //     }
+    // }
+    // dbgSerial.println();
+
+    *temp = *(DAStatus2_t*)(data + 2); // Copy the data into the temp structure
+
+    return true;
+}
+
+
+
+bool bq4050_reset(){
+    if(writeMACommand(MAC_CMD_DEV_RESET)) {
+        delay(500); // Wait for the device to reset
+        return true; // Return true if reset command was sent successfully
+    }
+    return false; // Return false if there was an error sending the reset command
+}
 
 
 void setup() {
@@ -405,8 +487,6 @@ void setup() {
     }
 #endif
     dbgSerial.begin(115200);        // For debugging, if needed
-    // Wire.setPins(SDA_PIN, SCL_PIN);
-    // Wire.setClock(100000);
     Wire.begin(); 
     CalculateTable_CRC8();
 }
@@ -420,189 +500,118 @@ void loop() {
 
     input = ""; // Reset input for new command
     if(listenString(input, '\n')) {
-        dbgSerial.print("Received command: ");
-        dbgSerial.println(input);
+        // dbgSerial.print("Received command: ");
+        // dbgSerial.println(input);
         bool res = parseJsonCommand(input.c_str(), &bat_cmd);
         if (res) {
-            printMeshsolarCmd(&bat_cmd);
+            // printMeshsolarCmd(&bat_cmd);
             /*  add some func call back here base on cmd sector */
-
-
-
-
+            if (0 == strcmp(bat_cmd.command, "config")) {
+                dbgSerial.println("Configuring Battery...");
+            }
+            else if (0 == strcmp(bat_cmd.command, "switch")) {
+                dbgSerial.print("FET Switch: ");
+                dbgSerial.println(bat_cmd.fet_en ? "ON" : "OFF");
+            }
+            else if (0 == strcmp(bat_cmd.command, "reset")) {
+                bq4050_reset();
+                dbgSerial.println("Resetting BQ4050...");
+            }
+            else{
+                dbgSerial.print("Unknown command: ");
+                dbgSerial.println(bat_cmd.command);
+            }
         } else {
             dbgSerial.println("Failed to parse command");
         }
     }
 
 
-#if 1
+#if 0
     if(0 == cnt % 1000) {
-
         // uint16_t value = 0;
         // if(bq4050_rd_word_with_pec(BQ4050_REG_VOLT, &value)) bat_sta.total_voltage = value / 1000.0f; 
         // dbgSerial.print("Battery Total Voltage: ");
         // dbgSerial.print(bat_sta.total_voltage, 2);
 
+        // bq4050_read_hw_version();
+        // bq4050_read_fw_version();
 
-        // while(!bq4050_read_fw_version());
+        DAStatus2_t temp = {0,};
+        bq4050_read_cell_temp(&temp);
+        dbgSerial.print("int temp: ");
+        dbgSerial.println(temp.int_temp/10.0f - 273.15f);
 
+        dbgSerial.print("ts1 temp: ");
+        dbgSerial.println(temp.ts1_temp/10.0f - 273.15f);
 
+        dbgSerial.print("ts2 temp: ");
+        dbgSerial.println(temp.ts2_temp/10.0f - 273.15f);
 
-        bq4050_read_fw_version();
+        dbgSerial.print("ts3 temp: ");
+        dbgSerial.println(temp.ts3_temp/10.0f - 273.15f);
 
+        dbgSerial.print("ts4 temp: ");
+        dbgSerial.println(temp.ts4_temp/10.0f - 273.15f);
 
+        dbgSerial.print("Cell Temp: ");
+        dbgSerial.println(temp.cell1_temp/10.0f - 273.15f);
 
-
-
-        // comSerial.println(cnt);
-
-
-        // // uint8_t arr[] = {0x16,0x44,0x02,0x03,0x00};   //pec = 0x53 ok
-        // // uint8_t arr[] = {0x16,0x44,0x02,0x02,0x00};   //pec = 0x46 ok
-        // uint8_t arr[] = {0x16, 0x44, 0x17, 0x04, 0x03, 0x00, 0x01,0x00};   //pec = 0x8C ok
-        // uint8_t arr[] = {0x16, 0x44, 0x17, 0x0D, 0x02, 0x00, 0x9e, 0x34, 0x00, 0x01, 0x00, 0x16, 0x00, 0x00, 0x00, 0x02, 0x00};   //pec =  0xE2 ok
-        // uint8_t pec = Compute_CRC8(arr, sizeof(arr));
-        // dbgSerial.print("PEC Test Check: 0x");
-        // dbgSerial.println(pec, HEX);
-
-
-        // uint16_t value = 0;
-        // if(bq4050_rd_word_with_pec(BQ4050_REG_RSOC, &value)){
-        //     dbgSerial.println("================================");        
-        //     dbgSerial.print("BQ4050_REG_RSOC: ");
-        //     dbgSerial.println(value);
-        // } else {
-        //     dbgSerial.println("Failed to read total voltage");
-        // }
+        dbgSerial.print("fet temp: ");
+        dbgSerial.println(temp.fet_temp/10.0f - 273.15f);
 
 
-        // uint16_t value = 0;
-        // value = bq4050_rd_word(BQ4050_REG_RSOC);
-        // dbgSerial.println("================================");
-        // dbgSerial.print("BQ4050_REG_RSOC: ");
-        // dbgSerial.println(value);
-
-        // dbgSerial.println(cnt);
     }
 #endif
 
-
-
-
-#if 0 //without pec
+#if 1
     if(0 == cnt % 1000) {
-        //update battery total voltage
-        bat_sta.total_voltage  = bq4050_rd_word(BQ4050_REG_VOLT) / 1000.0f;
-        //update solar charge current
-        bat_sta.charge_current = bq4050_rd_word(BQ4050_REG_CURRENT);
-        //update relative state of charge
-        bat_sta.soc_gauge      = bq4050_rd_word(BQ4050_REG_RSOC); // Convert to percentage
+        bat_sta.total_voltage  = bq4050_rd_word(BQ4050_REG_VOLT);
+        bat_sta.charge_current = (int16_t)bq4050_rd_word(BQ4050_REG_CURRENT);
+        bat_sta.soc_gauge      = bq4050_rd_word(BQ4050_REG_RSOC); 
+
+        delay(10); 
         //update battery cell count
         bat_sta.cell_count = bat_cmd.battery.cell_number; // Use the cell number from the command
+
+        DAStatus2_t temperature = {0,};
+        bq4050_read_cell_temp(&temperature);
+
+        bat_sta.cells[0].temperature = (bat_sta.cell_count >= 1) ? temperature.ts1_temp / 10.0f - 273.15f : 0.0f;
+        bat_sta.cells[1].temperature = (bat_sta.cell_count >= 2) ? temperature.ts2_temp / 10.0f - 273.15f : 0.0f;
+        bat_sta.cells[2].temperature = (bat_sta.cell_count >= 3) ? temperature.ts3_temp / 10.0f - 273.15f : 0.0f;
+        bat_sta.cells[3].temperature = (bat_sta.cell_count >= 4) ? temperature.ts4_temp / 10.0f - 273.15f : 0.0f;
 
         // update battery cell voltage
         for (uint8_t i = 0; i < bat_cmd.battery.cell_number; i++) {
             bat_sta.cells[i].cell_num = i + 1;
             // Cell1=0x3F, Cell2=0x3E, Cell3=0x3D, Cell4=0x3C
             uint8_t cell_reg = BQ4050_CELL1_VOLTAGE - i;
-            uint16_t cell_mv = bq4050_rd_word(cell_reg); // raw value in mV
-            bat_sta.cells[i].voltage = cell_mv / 1000.0; // convert to V
+            bat_sta.cells[i].voltage = bq4050_rd_word(cell_reg); 
+            delay(10); 
         }
-
+        
         //update battery learned capacity
-        bat_sta.learned_capacity = bq4050_rd_word(BQ4050_REG_FCC) / 1000.0; // convert to Ah
-
+        // if(bq4050_rd_word_with_pec(BQ4050_REG_FCC, &value)) bat_sta.learned_capacity = value/1000.0f; 
+        bat_sta.learned_capacity = bq4050_rd_word(BQ4050_REG_FCC) / 1000.0f; 
+        delay(10); 
 
         dbgSerial.println("================================");        
         dbgSerial.print("Battery Total Voltage: ");
-        dbgSerial.print(bat_sta.total_voltage, 2);
+        dbgSerial.print(bat_sta.total_voltage, 3);
         dbgSerial.println(" V");
 
         for (uint8_t i = 0; i < bat_cmd.battery.cell_number; i++) {
             dbgSerial.print("Cell ");
             dbgSerial.print(bat_sta.cells[i].cell_num);
             dbgSerial.print(" Voltage: ");
-            dbgSerial.print(bat_sta.cells[i].voltage, 2);
+            dbgSerial.print(bat_sta.cells[i].voltage, 0);
             dbgSerial.println(" V");
         }
 
         dbgSerial.print("Learned Capacity: ");
-        dbgSerial.print(bat_sta.learned_capacity, 2);
+        dbgSerial.print(bat_sta.learned_capacity, 3);
         dbgSerial.println(" Ah");
-
-        dbgSerial.print("Charge Current: ");
-        dbgSerial.print(bat_sta.charge_current);
-        dbgSerial.println(" mA");
-
-        dbgSerial.print("Full Charge Capacity: ");
-        dbgSerial.print(bat_sta.soc_gauge);
-        dbgSerial.println(" %");
-    }
-#endif
-
-
-
-
-#if 0 //pec
-    if(0 == cnt % 1000) {
-        uint16_t value = 0;
-
-        //update battery total voltage
-        if(bq4050_rd_word_with_pec(BQ4050_REG_VOLT, &value)) bat_sta.total_voltage = value / 1000.0f; 
-        delay(10); 
-
-        value = 0; // Reset value for next read
-        //update solar charge current
-        if(bq4050_rd_word_with_pec(BQ4050_REG_CURRENT, &value)) bat_sta.charge_current = (int16_t)value; 
-        bat_sta.charge_current = bat_sta.charge_current < 0 ? 0 : bat_sta.charge_current; // Ensure positive value
-        delay(10); 
-        
-        value = 0; // Reset value for next read
-        //update relative state of charge
-        bat_sta.soc_gauge = bq4050_rd_word(BQ4050_REG_RSOC); 
-        delay(10); 
-
-
-        //update battery cell count
-        bat_sta.cell_count = bat_cmd.battery.cell_number; // Use the cell number from the command
-
-
-        // update battery cell voltage
-        for (uint8_t i = 0; i < bat_cmd.battery.cell_number; i++) {
-            bat_sta.cells[i].cell_num = i + 1;
-            // Cell1=0x3F, Cell2=0x3E, Cell3=0x3D, Cell4=0x3C
-            uint8_t cell_reg = BQ4050_CELL1_VOLTAGE - i;
-
-            value = 0; // Reset value for next read
-            if(bq4050_rd_word_with_pec(cell_reg, &value)) bat_sta.cells[i].voltage = value; 
-
-            delay(10); 
-        }
-        
-        //update battery learned capacity
-        if(bq4050_rd_word_with_pec(BQ4050_REG_FCC, &value)) bat_sta.learned_capacity = value/1000.0f; 
-
-        delay(10); 
-
-
-
-        dbgSerial.println("================================");        
-        dbgSerial.print("Battery Total Voltage: ");
-        dbgSerial.print(bat_sta.total_voltage, 1);
-        dbgSerial.println(" mV");
-
-        for (uint8_t i = 0; i < bat_cmd.battery.cell_number; i++) {
-            dbgSerial.print("Cell ");
-            dbgSerial.print(bat_sta.cells[i].cell_num);
-            dbgSerial.print(" Voltage: ");
-            dbgSerial.print(bat_sta.cells[i].voltage, 3);
-            dbgSerial.println(" V");
-        }
-
-        dbgSerial.print("Learned Capacity: ");
-        dbgSerial.print(bat_sta.learned_capacity, 0);
-        dbgSerial.println(" mAh");
 
         dbgSerial.print("Charge Current: ");
         dbgSerial.print(bat_sta.charge_current);
