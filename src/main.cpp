@@ -189,6 +189,8 @@ void loop() {
             /*  add some func call back here base on cmd sector */
             if (0 == strcmp(cmd_t.command, "config")) {
                 g_bat_cmd = cmd_t;         // Update global command structure with new config
+
+
                 uint8_t cells_bits = 0b10; // Default to 0 for 1 cell
 
                 if(cmd_t.battery.cell_number == 1)      cells_bits = 0b00;
@@ -216,6 +218,21 @@ void loop() {
                 dbgSerial.print("DA Configuration after: 0x");
                 dbgSerial.println(da, HEX);
 
+
+
+
+
+                // Set the battery capacity in mAh
+                uint16_t design_cap = cmd_t.battery.design_capacity; // Convert Ah to mAh
+                bq4050.wd_df_block(DF_CMD_LEARNED_CAPACITY, (uint8_t*)&design_cap, 2);
+                delay(100); // Ensure the write is complete before reading
+
+                uint16_t ret = 0;
+                bq4050.rd_df_learned_cap((uint8_t*)&ret, 2);
+                dbgSerial.print(" Learned Capacity after: ");
+                dbgSerial.print(ret);
+                dbgSerial.println(" mAh");
+
             }
             else if (0 == strcmp(cmd_t.command, "switch")) {
                 bq4050.fet_toggle();
@@ -235,21 +252,31 @@ void loop() {
     }
 
 
-#if 0
+#if 1
     if(0 == cnt % 1000) {
-        uint8_t ret = 0;
-        bq4050.rd_df_da_configuration(&ret, 1);
-        dbgSerial.print("DA Configuration: ");
-        dbgSerial.print(ret, HEX);
+
+
+        uint16_t ret = 0;
+        bq4050.rd_df_learned_cap((uint8_t*)&ret, 2);
+        dbgSerial.print(" rd_df_learned_cap: ");
+        dbgSerial.print(ret);
         dbgSerial.println();
 
-        if(ret == 0x37) {
-            uint8_t df = 0x35;
-            bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
-        } else {
-            uint8_t df = 0x37;
-            bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
-        }
+
+
+        // uint8_t ret = 0;
+        // bq4050.rd_df_da_configuration(&ret, 1);
+        // dbgSerial.print("DA Configuration: ");
+        // dbgSerial.print(ret, HEX);
+        // dbgSerial.println();
+
+        // if(ret == 0x37) {
+        //     uint8_t df = 0x35;
+        //     bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
+        // } else {
+        //     uint8_t df = 0x37;
+        //     bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
+        // }
 
 
 

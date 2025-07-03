@@ -423,7 +423,32 @@ bool BQ4050::rd_df_da_configuration(uint8_t *data, uint8_t len) {
     return true; 
 }
 
+bool BQ4050::rd_df_learned_cap(uint8_t *data, uint8_t len) {
+    if (!wd_mac_cmd(DF_CMD_LEARNED_CAPACITY)) {
+        dbgSerial.println("Write df cmd failed!");
+        return false;
+    }
+    delay(18);
+    if (!rd_df_block(DF_CMD_LEARNED_CAPACITY, data, len, false)) {
+        dbgSerial.println("Read df cmd  failed!");
+        return false;
+    }
 
+    if(this->printResults){
+      for(uint8_t i = 0; i < len; i++) {
+          if (data[i] < 0x10) {
+              dbgSerial.print("0");
+          }
+          dbgSerial.print(data[i], HEX);
+          if (i < len - 1) {
+              dbgSerial.print(" ");
+          }
+      }
+      dbgSerial.println();
+    }
+
+    return true; 
+}
 
 
 

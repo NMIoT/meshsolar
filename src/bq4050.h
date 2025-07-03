@@ -46,8 +46,8 @@
 #define MAC_CMD_DA_STATUS2          0x0072
 #define DF_CMD_DEVICE_NAME          0x4085
 #define DF_CMD_MANUFACTURER_NAME    0x4070
-
 #define DF_CMD_DA_CONFIGURATION     0x457b
+#define DF_CMD_LEARNED_CAPACITY     0x4100
 
 
 class BQ4050{
@@ -93,8 +93,10 @@ public:
     bool rd_fw_version(uint8_t *data, uint8_t len);
     bool rd_df_dev_name(uint8_t *df, uint8_t len);
     bool rd_df_manufacturer_name(uint8_t *df, uint8_t len);
-    bool rd_cell_temp(uint8_t *data, uint8_t len);
     bool rd_df_da_configuration(uint8_t *data, uint8_t len);
+    bool rd_df_learned_cap(uint8_t *data, uint8_t len);
+
+    bool rd_cell_temp(uint8_t *data, uint8_t len);
     bool fet_toggle();
     bool reset();
 
