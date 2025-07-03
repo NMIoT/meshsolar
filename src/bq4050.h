@@ -45,6 +45,8 @@
 #define MAC_CMD_SECURITY_KEYS       0x0035
 #define MAC_CMD_DA_STATUS2          0x0072
 #define DF_CMD_DEVICE_NAME          0x4085
+#define DF_CMD_MANUFACTURER_NAME    0x4070
+
 #define DF_CMD_DA_CONFIGURATION     0x457b
 
 
@@ -79,7 +81,9 @@ public:
     uint16_t rd_reg_word(uint8_t reg);
     void wd_reg_word(uint8_t reg, uint16_t value);
 
-    bool rd_mac_block(byte *data, uint8_t arrLen = 32, bool withPEC = false);
+    bool rd_mac_block(uint8_t *data, uint8_t arrLen = 32, bool withPEC = false);
+    bool rd_df_block(uint16_t cmd,  uint8_t *data, uint8_t arrLen = 32, bool isString = false);
+    bool wd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen);
     bool wd_mac_cmd(uint16_t cmd);
     
 
@@ -87,9 +91,10 @@ public:
 
     bool rd_hw_version(uint8_t *data, uint8_t len);
     bool rd_fw_version(uint8_t *data, uint8_t len);
-    bool rd_dev_name(uint8_t *df, uint8_t len);
+    bool rd_df_dev_name(uint8_t *df, uint8_t len);
+    bool rd_df_manufacturer_name(uint8_t *df, uint8_t len);
     bool rd_cell_temp(uint8_t *data, uint8_t len);
-    bool rd_da_configuration(uint8_t *data, uint8_t len);
+    bool rd_df_da_configuration(uint8_t *data, uint8_t len);
     bool fet_toggle();
     bool reset();
 
@@ -103,7 +108,7 @@ public:
     // void wd_reg_word(uint8_t reg, uint16_t value);
     // bool bq4050_read_hw_version();
     // bool rd_fw_version();
-    // bool rd_dev_name(uint8_t *df, uint8_t len);
+    // bool rd_df_dev_name(uint8_t *df, uint8_t len);
     // bool bq4050_fet_control();
     // bool bq4050_reset();
 

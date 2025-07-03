@@ -211,26 +211,24 @@ void loop() {
 
 #if 1
     if(0 == cnt % 1000) {
-        uint8_t df[64] = {0,}; // Buffer to hold device name data
-        // bq4050.rd_dev_name(df, 32);
-
-        // dbgSerial.print("Device Name (ASCII): ");
-        // for (uint8_t i = 0; i < 32; i++) {
-        //     if (df[i] == 0) break; // Stop at null terminator
-        //     dbgSerial.print((char)df[i]);
-        // }
-        // dbgSerial.println();
-
+        uint8_t ret = 0;
+        bq4050.rd_df_da_configuration(&ret, 1);
         dbgSerial.print("DA Configuration: ");
-        bq4050.rd_da_configuration(df, 32);
-        for (uint8_t i = 0; i < 32; i++) {
-            if(df[i] < 0x10) dbgSerial.print("0");
-            dbgSerial.print(df[i], HEX);
-            dbgSerial.print(" ");
-        }
+        dbgSerial.print(ret, HEX);
         dbgSerial.println();
 
+        if(ret == 0x37) {
+            uint8_t df = 0x35;
+            bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
+        } else {
+            uint8_t df = 0x37;
+            bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
+        }
 
+
+
+        // uint8_t df = 0x37;
+        // bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
 
 
         // bq4050.rd_hw_version(df, 2);
