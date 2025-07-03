@@ -188,8 +188,34 @@ void loop() {
             // printMeshsolarCmd(&g_bat_cmd);
             /*  add some func call back here base on cmd sector */
             if (0 == strcmp(cmd_t.command, "config")) {
-                g_bat_cmd = cmd_t; // Update global command structure with new config
-                dbgSerial.println("Configuring Battery cmd Received.");
+                g_bat_cmd = cmd_t;         // Update global command structure with new config
+                uint8_t cells_bits = 0b10; // Default to 0 for 1 cell
+
+                if(cmd_t.battery.cell_number == 1)      cells_bits = 0b00;
+                else if(cmd_t.battery.cell_number == 2) cells_bits = 0b01;
+                else if(cmd_t.battery.cell_number == 3) cells_bits = 0b10;
+                else if(cmd_t.battery.cell_number == 4) cells_bits = 0b11;
+
+                uint8_t da = 0;
+                bq4050.rd_df_da_configuration(&da, 1); // Read current DA configuration
+                dbgSerial.print("DA Configuration before: 0x");
+                dbgSerial.println(da, HEX);
+
+                delay(100); // Ensure the read is complete before modifying
+
+
+                // Clear the last 2 bits first, then set new cell count bits
+                da &= 0b11111100; // Clear bits 0 and 1 (last 2 bits)
+                da |= cells_bits;  // Set new cell count bits
+                bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &da, 1);
+
+                delay(100); // Ensure the read is complete before modifying
+
+                da = 0;
+                bq4050.rd_df_da_configuration(&da, 1); // Read current DA configuration again
+                dbgSerial.print("DA Configuration after: 0x");
+                dbgSerial.println(da, HEX);
+
             }
             else if (0 == strcmp(cmd_t.command, "switch")) {
                 bq4050.fet_toggle();
@@ -209,7 +235,7 @@ void loop() {
     }
 
 
-#if 1
+#if 0
     if(0 == cnt % 1000) {
         uint8_t ret = 0;
         bq4050.rd_df_da_configuration(&ret, 1);
@@ -282,7 +308,7 @@ void loop() {
     }
 #endif
 
-#if 0
+#if 1
     if(0 == cnt % 1000) {
         g_bat_sta.total_voltage  = bq4050.rd_reg_word(BQ4050_REG_VOLT);
         g_bat_sta.charge_current = (int16_t)bq4050.rd_reg_word(BQ4050_REG_CURRENT);
@@ -317,30 +343,30 @@ void loop() {
         g_bat_sta.learned_capacity = bq4050.rd_reg_word(BQ4050_REG_FCC) / 1000.0f; 
         delay(10); 
 
-        dbgSerial.println("================================");        
-        dbgSerial.print("Battery Total Voltage: ");
-        dbgSerial.print(g_bat_sta.total_voltage, 3);
-        dbgSerial.println(" V");
+        // dbgSerial.println("================================");        
+        // dbgSerial.print("Battery Total Voltage: ");
+        // dbgSerial.print(g_bat_sta.total_voltage, 3);
+        // dbgSerial.println(" V");
 
-        for (uint8_t i = 0; i < g_bat_sta.cell_count; i++) {
-            dbgSerial.print("Cell ");
-            dbgSerial.print(g_bat_sta.cells[i].cell_num);
-            dbgSerial.print(" Voltage: ");
-            dbgSerial.print(g_bat_sta.cells[i].voltage, 0);
-            dbgSerial.println(" V");
-        }
+        // for (uint8_t i = 0; i < g_bat_sta.cell_count; i++) {
+        //     dbgSerial.print("Cell ");
+        //     dbgSerial.print(g_bat_sta.cells[i].cell_num);
+        //     dbgSerial.print(" Voltage: ");
+        //     dbgSerial.print(g_bat_sta.cells[i].voltage, 0);
+        //     dbgSerial.println(" V");
+        // }
 
-        dbgSerial.print("Learned Capacity: ");
-        dbgSerial.print(g_bat_sta.learned_capacity, 3);
-        dbgSerial.println(" Ah");
+        // dbgSerial.print("Learned Capacity: ");
+        // dbgSerial.print(g_bat_sta.learned_capacity, 3);
+        // dbgSerial.println(" Ah");
 
-        dbgSerial.print("Charge Current: ");
-        dbgSerial.print(g_bat_sta.charge_current);
-        dbgSerial.println(" mA");
+        // dbgSerial.print("Charge Current: ");
+        // dbgSerial.print(g_bat_sta.charge_current);
+        // dbgSerial.println(" mA");
 
-        dbgSerial.print("State of Charge: ");
-        dbgSerial.print(g_bat_sta.soc_gauge);
-        dbgSerial.println("%");
+        // dbgSerial.print("State of Charge: ");
+        // dbgSerial.print(g_bat_sta.soc_gauge);
+        // dbgSerial.println("%");
     }
 #endif
 
