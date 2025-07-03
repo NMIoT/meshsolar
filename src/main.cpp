@@ -14,25 +14,7 @@ SoftwareWire Wire( g_ADigitalPinMap[SDA_PIN], g_ADigitalPinMap[SCL_PIN]);
 
 uint8_t crctable[256];
 
-// uint8_t crctable[256] = {
-//   0x00,0x07,0x0E,0x09,0x1C,0x1B,0x12,0x15,0x38,0x3F,0x36,0x31,0x24,0x23,0x2A,0x2D,
-//   0x70,0x77,0x7E,0x79,0x6C,0x6B,0x62,0x65,0x48,0x4F,0x46,0x41,0x54,0x53,0x5A,0x5D,
-//   0xE0,0xE7,0xEE,0xE9,0xFC,0xFB,0xF2,0xF5,0xD8,0xDF,0xD6,0xD1,0xC4,0xC3,0xCA,0xCD,
-//   0x90,0x97,0x9E,0x99,0x8C,0x8B,0x82,0x85,0xA8,0xAF,0xA6,0xA1,0xB4,0xB3,0xBA,0xBD,
-//   0xC7,0xC0,0xC9,0xCE,0xDB,0xDC,0xD5,0xD2,0xFF,0xF8,0xF1,0xF6,0xE3,0xE4,0xED,0xEA,
-//   0xB7,0xB0,0xB9,0xBE,0xAB,0xAC,0xA5,0xA2,0x8F,0x88,0x81,0x86,0x93,0x94,0x9D,0x9A,
-//   0x27,0x20,0x29,0x2E,0x3B,0x3C,0x35,0x32,0x1F,0x18,0x11,0x16,0x03,0x04,0x0D,0x0A,
-//   0x57,0x50,0x59,0x5E,0x4B,0x4C,0x45,0x42,0x6F,0x68,0x61,0x66,0x73,0x74,0x7D,0x7A,
-//   0x89,0x8E,0x87,0x80,0x95,0x92,0x9B,0x9C,0xB1,0xB6,0xBF,0xB8,0xAD,0xAA,0xA3,0xA4,
-//   0xF9,0xFE,0xF7,0xF0,0xE5,0xE2,0xEB,0xEC,0xC1,0xC6,0xCF,0xC8,0xDD,0xDA,0xD3,0xD4,
-//   0x69,0x6E,0x67,0x60,0x75,0x72,0x7B,0x7C,0x51,0x56,0x5F,0x58,0x4D,0x4A,0x43,0x44,
-//   0x19,0x1E,0x17,0x10,0x05,0x02,0x0B,0x0C,0x21,0x26,0x2F,0x28,0x3D,0x3A,0x33,0x34,
-//   0x4E,0x49,0x40,0x47,0x52,0x55,0x5C,0x5B,0x76,0x71,0x78,0x7F,0x6A,0x6D,0x64,0x63,
-//   0x3E,0x39,0x30,0x37,0x22,0x25,0x2C,0x2B,0x06,0x01,0x08,0x0F,0x1A,0x1D,0x14,0x13,
-//   0xAE,0xA9,0xA0,0xA7,0xB2,0xB5,0xBC,0xBB,0x96,0x91,0x98,0x9F,0x8A,0x8D,0x84,0x83,
-//   0xDE,0xD9,0xD0,0xD7,0xC2,0xC5,0xCC,0xCB,0xE6,0xE1,0xE8,0xEF,0xFA,0xFD,0xF4,0xF3
-// };
-bool printResults;
+bool printResults = false; // Set to true to print CRC results to the debug serial
 
 // {"command":"config","battery":{"type":"LiFePO4","cell_number":4,"design_capacity":3200,"cutoff_voltage":2800},"temperature_protection":{"high_temp_c":60,"high_temp_enabled":true,"low_temp_c":-10,"low_temp_enabled":true}}
 
@@ -85,17 +67,17 @@ void CalculateTable_CRC8(){
     {
       if (divident % 16 == 0 && divident > 2)
       {
-        comSerial.println();
+        dbgSerial.println();
       }
       if (currByte < 16)
-        comSerial.print("0");
-      comSerial.print(currByte, HEX);
-      comSerial.print("\t");
+        dbgSerial.print("0");
+      dbgSerial.print(currByte, HEX);
+      dbgSerial.print("\t");
     }
   }
   if (printResults)
   {
-    comSerial.println();
+    dbgSerial.println();
   }
 }
 
@@ -122,32 +104,32 @@ byte Compute_CRC8(byte *bytes, uint8_t byteLen){
   return crc;
 }
 
-static void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
-    if (strcmp(cmd->command, "config") == 0) {
-        dbgSerial.println("Battery Config:");
-        dbgSerial.print("       Type: "); dbgSerial.println(cmd->battery.type);
-        dbgSerial.print("       Cell Number: "); dbgSerial.println(cmd->battery.cell_number);
-        dbgSerial.print("       Design Capacity: "); dbgSerial.println(cmd->battery.design_capacity);
-        dbgSerial.print("       Cutoff Voltage: "); dbgSerial.println(cmd->battery.cutoff_voltage);
+// static void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
+//     if (strcmp(cmd->command, "config") == 0) {
+//         dbgSerial.println("Battery Config:");
+//         dbgSerial.print("       Type: "); dbgSerial.println(cmd->battery.type);
+//         dbgSerial.print("       Cell Number: "); dbgSerial.println(cmd->battery.cell_number);
+//         dbgSerial.print("       Design Capacity: "); dbgSerial.println(cmd->battery.design_capacity);
+//         dbgSerial.print("       Cutoff Voltage: "); dbgSerial.println(cmd->battery.cutoff_voltage);
 
-        dbgSerial.println("Temperature Protection:");
-        dbgSerial.print("       High Temp (C): "); dbgSerial.println(cmd->temperature_protection.high_temp_c);
-        dbgSerial.print("       High Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.high_temp_enabled ? "true" : "false");
-        dbgSerial.print("       Low Temp (C): "); dbgSerial.println(cmd->temperature_protection.low_temp_c);
-        dbgSerial.print("       Low Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.low_temp_enabled ? "true" : "false");
-    }
-    else if (strcmp(cmd->command, "switch") == 0) {
-        dbgSerial.print("FET Switch: ");
-        dbgSerial.println(cmd->fet_en ? "ON" : "OFF");
-    }
-    else if (strcmp(cmd->command, "reset") == 0) {
-        dbgSerial.println("Device Reset Command Received");
-    }
-    else{
-        dbgSerial.print("Unknown command: ");
-        dbgSerial.println(cmd->command);
-    }
-}
+//         dbgSerial.println("Temperature Protection:");
+//         dbgSerial.print("       High Temp (C): "); dbgSerial.println(cmd->temperature_protection.high_temp_c);
+//         dbgSerial.print("       High Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.high_temp_enabled ? "true" : "false");
+//         dbgSerial.print("       Low Temp (C): "); dbgSerial.println(cmd->temperature_protection.low_temp_c);
+//         dbgSerial.print("       Low Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.low_temp_enabled ? "true" : "false");
+//     }
+//     else if (strcmp(cmd->command, "switch") == 0) {
+//         dbgSerial.print("FET Switch: ");
+//         dbgSerial.println(cmd->fet_en ? "ON" : "OFF");
+//     }
+//     else if (strcmp(cmd->command, "reset") == 0) {
+//         dbgSerial.println("Device Reset Command Received");
+//     }
+//     else{
+//         dbgSerial.print("Unknown command: ");
+//         dbgSerial.println(cmd->command);
+//     }
+// }
 
 static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
     StaticJsonDocument<1024> doc;
@@ -310,8 +292,8 @@ void bq4050_wd_word(uint8_t reg, uint16_t value){
 }
 
 
-bool readBQ4050BlockData(byte regAddress, byte *dataVal, uint8_t arrLen ) {
-    uint8_t buf[32] = {
+bool readBQ4050BlockData(uint16_t regAddress, byte *dataVal, uint8_t arrLen ) {
+    uint8_t buf[32+2] = {
         BQ4050addr<<1,     
         BLOCK_ACCESS_CMD, 
         (BQ4050addr<<1) + 1,
@@ -331,17 +313,17 @@ bool readBQ4050BlockData(byte regAddress, byte *dataVal, uint8_t arrLen ) {
 
     // data len, pec not included
     buf[3] = Wire.read(); // data length
-    if (buf[3] > 32) {
-        dbgSerial.println("Block data length exceeds 32 bytes, invalid data.");
+    if (buf[3] > 32 + 2) {
+        dbgSerial.print("Block data length exceeds 32 bytes, invalid data length : ");
+        dbgSerial.println(buf[3]);
         return false; // avoid buffer overflow
     }
-    // dbgSerial.print("SMBus block data length: ");
-    // dbgSerial.println(buf[3]);
+    dbgSerial.print("SMBus block data length: ");
+    dbgSerial.println(buf[3]);
+    dbgSerial.println(Wire.available());
+    
 
-
-
-
-    for (uint8_t i = 0; i < buf[3]; i++) {
+    for (uint8_t i = 0; i < buf[3] - 1; i++) {
         if (Wire.available()) {
             buf[i + 4] = Wire.read();
         }
@@ -351,19 +333,27 @@ bool readBQ4050BlockData(byte regAddress, byte *dataVal, uint8_t arrLen ) {
         }
     }
 
-    uint8_t PECcheck = Compute_CRC8(buf, buf[3] + 4); // Calculate PEC for the received data
+    // uint8_t PECcheck = Compute_CRC8(buf, buf[3] + 4); // Calculate PEC for the received data
 
-    if (Wire.available()) {
-        uint8_t pec = Wire.read();
-        if(PECcheck == pec) {
-            for (uint8_t i = 0; i < buf[3]; i++) {
-                dataVal[i] = buf[i + 4];
-            }
-        }
-        return (PECcheck == pec); // Compare calculated PEC with received PEC
+    // if (Wire.available()) {
+    //     uint8_t pec = Wire.read();
+    //     if(PECcheck == pec) {
+    //         for (uint8_t i = 0; i < buf[3]; i++) {
+    //             dataVal[i] = buf[i + 4];
+    //         }
+    //     }
+    //     return (PECcheck == pec); // Compare calculated PEC with received PEC
+    // }
+    // dbgSerial.println("Block data read error, no PEC byte received.");
+    // return false; // If PEC does not match, return false
+
+
+
+    for (uint8_t i = 0; i < buf[3]; i++) {
+        dataVal[i] = buf[i + 4];
     }
-    dbgSerial.println("Block data read error, no PEC byte received.");
-    return false; // If PEC does not match, return false
+
+    return true; 
 }
 
 
@@ -497,6 +487,38 @@ bool bq4050_reset(){
 }
 
 
+bool bq4050_df_dev_name_read(uint8_t *df, uint8_t len) {
+
+    uint8_t data[32] = {0,};
+    if (!writeMACommand(DF_CMD_DEVICE_NAME)) {
+        dbgSerial.println("Write df cmd failed!");
+        return false;
+    }
+    delay(18);
+    if (!readBQ4050BlockData(DF_CMD_DEVICE_NAME, data, sizeof(data))) {
+        dbgSerial.println("Read df cmd  failed!");
+        return false;
+    }
+
+    // for(uint8_t i = 0; i < sizeof(data); i++) {
+    //     if (data[i] < 0x10) {
+    //         dbgSerial.print("0");
+    //     }
+    //     dbgSerial.print(data[i], HEX);
+    //     if (i < sizeof(data) - 1) {
+    //         dbgSerial.print(" ");
+    //     }
+    // }
+    // dbgSerial.println();
+
+    memcpy(df, data, len); // Copy the data into the df array
+
+    return true; // Return true if data was read successfully and PEC matches
+}
+
+
+
+
 void setup() {
 #if 1
     comSerial.begin(115200); 
@@ -550,8 +572,27 @@ void loop() {
     }
 
 
-#if 0
+#if 1
     if(0 == cnt % 1000) {
+        uint8_t df[21] = {0,}; // Buffer to hold device name data
+
+        bq4050_df_dev_name_read(df , sizeof(df));
+        dbgSerial.print("Device Name (ASCII): ");
+        // for (uint8_t i = 0; i < sizeof(df); i++) {
+        //     if (df[i] == 0) break; // Stop at null terminator
+        //     dbgSerial.print((char)df[i]);
+        // }
+        // dbgSerial.println();
+        for(uint8_t i = 0; i < sizeof(df); i++) {
+            // if (df[i] == 0) break; // Stop at null terminator
+            dbgSerial.print(df[i], HEX);
+        }
+        dbgSerial.println();
+
+
+
+
+
         // uint16_t value = 0;
         // if(bq4050_rd_word_with_pec(BQ4050_REG_VOLT, &value)) g_bat_sta.total_voltage = value / 1000.0f; 
         // dbgSerial.print("Battery Total Voltage: ");
@@ -560,32 +601,32 @@ void loop() {
         // bq4050_read_hw_version();
         // bq4050_read_fw_version();
 
-        DAStatus2_t temp = {0,};
-        bq4050_read_cell_temp(&temp);
-        dbgSerial.print("int temp: ");
-        dbgSerial.println(temp.int_temp/10.0f - 273.15f);
+        // DAStatus2_t temp = {0,};
+        // bq4050_read_cell_temp(&temp);
+        // dbgSerial.print("int temp: ");
+        // dbgSerial.println(temp.int_temp/10.0f - 273.15f);
 
-        dbgSerial.print("ts1 temp: ");
-        dbgSerial.println(temp.ts1_temp/10.0f - 273.15f);
+        // dbgSerial.print("ts1 temp: ");
+        // dbgSerial.println(temp.ts1_temp/10.0f - 273.15f);
 
-        dbgSerial.print("ts2 temp: ");
-        dbgSerial.println(temp.ts2_temp/10.0f - 273.15f);
+        // dbgSerial.print("ts2 temp: ");
+        // dbgSerial.println(temp.ts2_temp/10.0f - 273.15f);
 
-        dbgSerial.print("ts3 temp: ");
-        dbgSerial.println(temp.ts3_temp/10.0f - 273.15f);
+        // dbgSerial.print("ts3 temp: ");
+        // dbgSerial.println(temp.ts3_temp/10.0f - 273.15f);
 
-        dbgSerial.print("ts4 temp: ");
-        dbgSerial.println(temp.ts4_temp/10.0f - 273.15f);
+        // dbgSerial.print("ts4 temp: ");
+        // dbgSerial.println(temp.ts4_temp/10.0f - 273.15f);
 
-        dbgSerial.print("Cell Temp: ");
-        dbgSerial.println(temp.cell1_temp/10.0f - 273.15f);
+        // dbgSerial.print("Cell Temp: ");
+        // dbgSerial.println(temp.cell1_temp/10.0f - 273.15f);
 
-        dbgSerial.print("fet temp: ");
-        dbgSerial.println(temp.fet_temp/10.0f - 273.15f);
+        // dbgSerial.print("fet temp: ");
+        // dbgSerial.println(temp.fet_temp/10.0f - 273.15f);
     }
 #endif
 
-#if 1
+#if 0
     if(0 == cnt % 1000) {
         g_bat_sta.total_voltage  = bq4050_rd_word(BQ4050_REG_VOLT);
         g_bat_sta.charge_current = (int16_t)bq4050_rd_word(BQ4050_REG_CURRENT);
@@ -645,7 +686,7 @@ void loop() {
 #endif
 
 
-#if 1
+#if 0
     if(0 == cnt % 1500){
         strlcpy(g_bat_sta.command, "status", sizeof(g_bat_sta.command));
         String json = "";
