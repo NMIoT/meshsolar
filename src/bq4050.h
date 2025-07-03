@@ -45,9 +45,7 @@
 #define MAC_CMD_SECURITY_KEYS       0x0035
 #define MAC_CMD_DA_STATUS2          0x0072
 #define DF_CMD_DEVICE_NAME          0x4085
-
-
-
+#define DF_CMD_DA_CONFIGURATION     0x457b
 
 
 class BQ4050{
@@ -57,37 +55,55 @@ private:
     bool printResults ; // Set to true to print CRC results to the debug serial
 
     uint8_t devAddr;
-    uint8_t crc8_tab[256];
 
     void crc8_tab_init();
     uint8_t compute_crc8(uint8_t *bytes, int byteLen);
 
 
 public:
-    BQ4050(SoftwareWire *wire, uint8_t devaddr = BQ4050ADDR, bool printResults = false)
-        : wire(wire), crctable{0}, printResults(printResults), devAddr(devaddr), crc8_tab{0}
-    {
-        crc8_tab_init();
-        wire->begin();
+    BQ4050(bool printResults = false){
+        this->printResults = printResults;
     }
     ~BQ4050() {
-        wire->end();
-        delete wire; // Clean up the SoftwareWire instance
+        this->wire->end();
+        delete this->wire;
     }
 
+    void begin(SoftwareWire *pwire, uint8_t devaddr = BQ4050ADDR) {
+        crc8_tab_init();
+        this->wire = pwire;
+        this->devAddr = devaddr;
+        this->wire->begin();
+    }
 
-    uint16_t bq4050_rd_word(uint8_t reg);
-    bool bq4050_rd_word_with_pec(uint8_t reg, uint16_t *value); 
-    void bq4050_wd_word(uint8_t reg, uint16_t value);
+    uint16_t rd_reg_word(uint8_t reg);
+    void wd_reg_word(uint8_t reg, uint16_t value);
+
+    bool rd_mac_block(byte *data, uint8_t arrLen = 32, bool withPEC = false);
+    bool wd_mac_cmd(uint16_t cmd);
+    
 
 
-    // bool writeMACommand(uint16_t cmd);
-    // bool readBQ4050BlockData(uint16_t cmd, uint8_t *data, size_t len);
-    // bool bq4050_rd_word_with_pec(uint8_t reg, uint16_t *value);
-    // void bq4050_wd_word(uint8_t reg, uint16_t value);
+
+    bool rd_hw_version(uint8_t *data, uint8_t len);
+    bool rd_fw_version(uint8_t *data, uint8_t len);
+    bool rd_dev_name(uint8_t *df, uint8_t len);
+    bool rd_cell_temp(uint8_t *data, uint8_t len);
+    bool rd_da_configuration(uint8_t *data, uint8_t len);
+    bool fet_toggle();
+    bool reset();
+
+
+
+
+
+    // bool wd_mac_cmd(uint16_t cmd);
+    // bool rd_mac_block(uint16_t cmd, uint8_t *data, size_t len);
+    // bool rd_reg_word_with_pec(uint8_t reg, uint16_t *value);
+    // void wd_reg_word(uint8_t reg, uint16_t value);
     // bool bq4050_read_hw_version();
-    // bool bq4050_read_fw_version();
-    // bool bq4050_df_dev_name_read(uint8_t *df, uint8_t len);
+    // bool rd_fw_version();
+    // bool rd_dev_name(uint8_t *df, uint8_t len);
     // bool bq4050_fet_control();
     // bool bq4050_reset();
 
