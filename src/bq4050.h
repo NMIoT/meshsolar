@@ -49,6 +49,11 @@
 
 
 
+typedef enum{
+    NUMBER,
+    STRING
+}block_type;
+
 typedef struct{
     uint8_t  addr;
     uint16_t value;
@@ -57,7 +62,8 @@ typedef struct{
 typedef struct{
     uint16_t  cmd;     // command to access the data block
     uint8_t   len;     // Length of the data block
-    uint8_t   *pblcok; // Pointer to the data block
+    uint8_t   *pvalue; // Pointer to the data block
+    block_type type;   // Type of the data block (NUMBER or STRING)
 }bq4050_block_t;
 
 
@@ -72,6 +78,9 @@ private:
     void crc8_tab_init();
     uint8_t compute_crc8(uint8_t *bytes, int byteLen);
 
+    bool _wd_mac_cmd(uint16_t cmd);
+    bool _rd_mac_block(bq4050_block_t *block);
+    bool _rd_df_block(bq4050_block_t  *block);
 
 public:
     BQ4050(bool printResults = false){
@@ -92,19 +101,18 @@ public:
     bool rd_reg_word(bq4050_reg_t *reg);
     bool wd_reg_word(bq4050_reg_t reg);
 
-    bool rd_mac_block(uint8_t *data, uint8_t arrLen = 32);
-    bool rd_df_block(uint16_t cmd,  uint8_t *data, uint8_t arrLen = 32, bool isString = false);
-    bool wd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen);
-    bool wd_mac_cmd(uint16_t cmd);
+    bool write_dataflash_block(bq4050_block_t *block);
+    bool read_mac_block(bq4050_block_t *block);
+    bool read_dataflash_block (bq4050_block_t *block);
     
-    bool rd_hw_version(uint8_t *data, uint8_t len);
-    bool rd_fw_version(uint8_t *data, uint8_t len);
-    bool rd_df_dev_name(uint8_t *df, uint8_t len);
-    bool rd_df_manufacturer_name(uint8_t *df, uint8_t len);
-    bool rd_df_da_configuration(uint8_t *data, uint8_t len);
-    bool rd_df_learned_cap(uint8_t *data, uint8_t len);
+    // bool rd_hw_version(uint8_t *data, uint8_t len);
+    // bool rd_fw_version();
+    // bool rd_df_dev_name(uint8_t *df, uint8_t len);
+    // bool rd_df_manufacturer_name(uint8_t *df, uint8_t len);
+    // bool rd_df_da_configuration(uint8_t *data, uint8_t len);
+    // bool rd_df_learned_cap(uint8_t *data, uint8_t len);
+    // bool rd_cell_temp(uint8_t *data, uint8_t len);
 
-    bool rd_cell_temp(uint8_t *data, uint8_t len);
     bool fet_toggle();
     bool reset();
 };

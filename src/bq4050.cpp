@@ -92,13 +92,7 @@ bool BQ4050::wd_reg_word(bq4050_reg_t reg){
   return (result == 0); // Return true if transmission was successful
 }
 
-
-
-
-
-
-
-bool BQ4050::wd_mac_cmd(uint16_t cmd){
+bool BQ4050::_wd_mac_cmd(uint16_t cmd){
     //for simplicity, we create an array to hold all the byte we will be sending
     uint8_t byteArr[5] = {
         (uint8_t)(this->devAddr<<1),    
@@ -126,25 +120,18 @@ bool BQ4050::wd_mac_cmd(uint16_t cmd){
     return (ack == 0); // Return true if transmission was successful
 }
 
-bool BQ4050::rd_mac_block(uint8_t *data, uint8_t arrLen) {
-    uint8_t buf[32] = {
-        (uint8_t)(this->devAddr<<1),     
-        BLOCK_ACCESS_CMD, 
-        (uint8_t)((this->devAddr<<1) + 1),
-    };
+bool BQ4050::_rd_mac_block(bq4050_block_t *block){
+    static uint8_t buf[32];
+    memset(buf, 0, sizeof(buf));                // Clear the buffer to avoid garbage data
+
+    buf[0] = (uint8_t)(this->devAddr<<1);       // Device address shifted left by 1
+    buf[1] = (uint8_t)(BLOCK_ACCESS_CMD);       // Command for block access
+    buf[2] = (uint8_t)((this->devAddr<<1) + 1); // Read command, shifted left by 1 and incremented by 1
 
     this->wire->beginTransmission(this->devAddr);
     this->wire->write(BLOCK_ACCESS_CMD);
     this->wire->endTransmission(false); 
-
-    this->wire->requestFrom((uint8_t)this->devAddr, (uint8_t)(arrLen + 2)); // send start signal
-    uint32_t start = millis();
-    while (this->wire->available() < 1) {
-        if (millis() - start > 500){
-            dbgSerial.println("SMBus read timeout!");
-            return false; 
-        }
-    }
+    this->wire->requestFrom((uint8_t)this->devAddr, (uint8_t)(block->len + 4)); // send start signal
 
     // data len, pec not included in this len
     buf[3] = this->wire->read(); // data length
@@ -154,9 +141,8 @@ bool BQ4050::rd_mac_block(uint8_t *data, uint8_t arrLen) {
         return false; // avoid buffer overflow
     }
 
-
     for (uint8_t i = 0; i < buf[3]; i++) {
-        if (this->wire->available()) {
+        if (this->wire->available()){
             buf[i + 4] = this->wire->read();
         }
         else {
@@ -165,42 +151,90 @@ bool BQ4050::rd_mac_block(uint8_t *data, uint8_t arrLen) {
         }
     }
 
+    // Check if the command in the block matches the expected command
+    // buf[4] and buf[5] is the command which is returned by the device
+    if(*(uint16_t *)(buf + 4) != block->cmd){
+        dbgSerial.print("Command received: ");
+        dbgSerial.print(*(uint16_t *)(buf + 4), HEX);
+        dbgSerial.print(", expected: ");
+        dbgSerial.println(block->cmd, HEX);
+        return false; // If the command does not match, return false
+    }
 
-    uint8_t PECcheck = this->compute_crc8(buf, buf[3] + 4); // Calculate PEC for the received data
+    uint8_t PECcheck = this->compute_crc8(buf, buf[3] + 4); // Calculate PEC for the received data, not including the command and PEC byte itself
     if (this->wire->available()) {
         uint8_t pec = this->wire->read();
         if(PECcheck == pec) {
-        for (uint8_t i = 0; i < buf[3]; i++) {
-            data[i] = buf[i + 4 + 2];
-        }
+            block->pvalue = buf + 4 + 2; // Assign the data to the block pointer, jump buf[4] and buf[5] which are the command bytes
+            block->len    = buf[3] - 2;      // Set the length of the block
         }
         return (PECcheck == pec); // Compare calculated PEC with received PEC
     }
     dbgSerial.println("Block data read error, no PEC byte received.");
     return false; // If PEC does not match, return false
-
-
-
-    return false; 
 }
 
 
 
-bool BQ4050::wd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen) {
+bool BQ4050::_rd_df_block(bq4050_block_t *block) {
+    uint8_t reqLen = (block->type == STRING) ? block->len + 4 : block->len + 3; 
+    static uint8_t buf[32];
+    memset(buf, 0, sizeof(buf)); // Clear the buffer to avoid garbage data
+
+    this->wire->beginTransmission(this->devAddr);
+    this->wire->write(BLOCK_ACCESS_CMD);
+    this->wire->endTransmission(false); 
+    this->wire->requestFrom((uint8_t)this->devAddr, reqLen); // send start signal
+
+    buf[0] = this->wire->read(); // Read the first byte as package length
+    buf[1] = this->wire->read();
+    buf[2] = this->wire->read(); // Read the next two bytes as command
+
+    if(*(uint16_t*)(buf + 1) != block->cmd) {
+        dbgSerial.print("Command mismatch!");
+        return false;
+    }
+
+    for (uint8_t i = 0; i < block->len; i++) {
+        if (this->wire->available()) {
+            buf[i + 3] = this->wire->read(); // Read the data bytes
+        }
+        else {
+            dbgSerial.println("Block data read error, not enough data available.");
+            return false; 
+        }
+    }
+    block->pvalue = (block->type == STRING) ? buf + 4 : buf + 3; // buf[3] is the data length byte if block is STRING，or buf[3] is the first data byte if block is NUMBER
+    return true; 
+}
+
+bool BQ4050::read_mac_block(bq4050_block_t *block) {
+    if (!this->_wd_mac_cmd(block->cmd)) {
+        dbgSerial.println("Write MAC CMD FW failed!");
+        return false;
+    }
+    if (!this->_rd_mac_block(block)) {
+        dbgSerial.println("Read MAC CMD FW failed!");
+        return false;
+    }
+    return true;
+}
+
+bool BQ4050::write_dataflash_block(bq4050_block_t *block) {
     // Prepare the command to write to the device
     // According to manual: block = starting address + DF data block
     // Total bytes = 2 bytes for starting address + arrLen bytes for data
-    uint8_t totalBytes = 2 + arrLen;
+    uint8_t totalBytes = 2 + block->len;
     
     this->wire->beginTransmission(this->devAddr);
     this->wire->write(BLOCK_ACCESS_CMD);
     this->wire->write(totalBytes); // Total number of bytes (address + data)
-    this->wire->write((uint8_t)(cmd & 0xFF)); // Starting address LSB
-    this->wire->write((uint8_t)((cmd >> 8) & 0xFF)); // Starting address MSB
+    this->wire->write((uint8_t)(block->cmd & 0xFF)); // Starting address LSB
+    this->wire->write((uint8_t)((block->cmd >> 8) & 0xFF)); // Starting address MSB
 
     // Write the DF data block
-    for (uint8_t i = 0; i < arrLen; i++) {
-        this->wire->write(data[i]);
+    for (uint8_t i = 0; i < block->len; i++) {
+        this->wire->write(block->pvalue[i]);
     }
 
     uint8_t result = this->wire->endTransmission();
@@ -228,262 +262,23 @@ bool BQ4050::wd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen) {
         }
         return false; // Return false if transmission was not successful
     }
-    
     return true; 
 }
 
-bool BQ4050::rd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen, bool isString) {
-    this->wire->beginTransmission(this->devAddr);
-    this->wire->write(BLOCK_ACCESS_CMD);
-    this->wire->endTransmission(false); 
-
-    uint8_t reqLen = (isString) ? arrLen + 4 : arrLen + 3; 
-
-    this->wire->requestFrom((uint8_t)this->devAddr, reqLen); // send start signal
-    uint32_t start = millis();
-    while (this->wire->available() < 1) {
-        if (millis() - start > 500){
-            dbgSerial.println("SMBus read timeout!");
-            return false; 
-        }
-    }
-
-
-    uint8_t packlen = this->wire->read(); // Read the first byte as package length
-
-    uint16_t cmdret = this->wire->read();
-    cmdret |= (this->wire->read() << 8); // Read the next two bytes as command
-
-    if(cmdret != cmd) {
-        dbgSerial.print("Command mismatch, expected: ");
-        dbgSerial.print(cmd, HEX);
-        dbgSerial.print(", received: ");
-        dbgSerial.println(*(uint16_t *)(data + 1), HEX);
-        return false; // Command mismatch
-    }
-
-    uint8_t strLen = (isString) ? this->wire->read() : 0; // Read the next byte as string length if isString is true
-    
-    for (uint8_t i = 0; i < arrLen; i++) {
-        if (this->wire->available()) {
-            data[i] = this->wire->read();
-        }
-        else {
-            dbgSerial.println("Block data read error, not enough data available.");
-            return false; 
-        }
-    }
-
-    return true; 
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-bool BQ4050::rd_cell_temp(uint8_t *data, uint8_t len) {
-    if (!wd_mac_cmd(MAC_CMD_DA_STATUS2)) {
-        dbgSerial.println("Write cell temp failed!");
-        return false;
-    }
-    delay(18);
-    len+=2;
-    if (!rd_mac_block(data, len)) {
-        dbgSerial.println("Read cell temp  failed!");
-        return false;
-    }
-
-    if(this->printResults){
-      for(uint8_t i = 0; i < len; i++) {
-          if (data[i] < 0x10) {
-              dbgSerial.print("0");
-          }
-          dbgSerial.print(data[i], HEX);
-          if (i < len - 1) {
-              dbgSerial.print(" ");
-          }
-      }
-      dbgSerial.println();
-    }
-
-    return true;
-}
-
-bool BQ4050::rd_fw_version(uint8_t *data, uint8_t len) {
-    // uint8_t data[11 + 2] = {0,}; // 11 bytes for firmware version + 1 byte for data length + 1 byte for PEC
-    if (!this->wd_mac_cmd(MAC_CMD_FW_VER)) {
-        dbgSerial.println("Write MAC CMD FW failed!");
-        return false;
-    }
-    delay(18);
-    len+=2;
-    if (!this->rd_mac_block(data, len)) {
-        dbgSerial.println("Read MAC CMD FW failed!");
-        return false;
-    }
-
-    if(this->printResults){
-      for(uint8_t i = 0; i < len; i++) {
-          if (data[i] < 0x10) {
-              dbgSerial.print("0");
-          }
-          dbgSerial.print(data[i], HEX);
-          if (i < len - 1) {
-              dbgSerial.print(" ");
-          }
-      }
-      dbgSerial.println();
-    }
-
-    return true;
-}
-
-bool BQ4050::rd_hw_version(uint8_t *data, uint8_t len) {
-    // uint8_t data[2 + 2] = {0,}; // 2 bytes for hardware version + 1 byte for data length + 1 byte for PEC
-    if (!this->wd_mac_cmd(MAC_CMD_HW_VER)) {
-        dbgSerial.println("Write MAC CMD HW failed!");
-        return false;
-    }
-    delay(18);
-    len+=2;
-    if (!this->rd_mac_block(data, len)) {
-        dbgSerial.println("Read MAC CMD HW failed!");
-        return false;
-    }
-
-    if(this->printResults){
-      for(uint8_t i = 0; i < len; i++) {
-          if (data[i] < 0x10) {
-              dbgSerial.print("0");
-          }
-          dbgSerial.print(data[i], HEX);
-          if (i < len - 1) {
-              dbgSerial.print(" ");
-          }
-      }
-      dbgSerial.println();
-    }
-
-    return true;
-}
-
-bool BQ4050::rd_df_dev_name(uint8_t *data, uint8_t len) {
-    if (!wd_mac_cmd(DF_CMD_DEVICE_NAME)) {
+bool BQ4050::read_dataflash_block(bq4050_block_t *block) {
+    if (!_wd_mac_cmd(block->cmd)) {
         dbgSerial.println("Write df cmd failed!");
         return false;
     }
-    delay(18);
-    if (!rd_df_block(DF_CMD_DEVICE_NAME, data, len, true)) {
+    if (!_rd_df_block(block)) {
         dbgSerial.println("Read df cmd  failed!");
         return false;
     }
-
-    if(this->printResults){
-      for(uint8_t i = 0; i < len; i++) {
-          if (data[i] < 0x10) {
-              dbgSerial.print("0");
-          }
-          dbgSerial.print(data[i], HEX);
-          if (i < len - 1) {
-              dbgSerial.print(" ");
-          }
-      }
-      dbgSerial.println();
-    }
-
     return true; // Return true if data was read successfully and PEC matches
 }
 
-bool BQ4050::rd_df_manufacturer_name(uint8_t *data, uint8_t len) {
-    if (!wd_mac_cmd(DF_CMD_MANUFACTURER_NAME)) {
-        dbgSerial.println("Write df cmd failed!");
-        return false;
-    }
-    delay(18);
-    if (!rd_df_block(DF_CMD_MANUFACTURER_NAME, data, len, true)) {
-        dbgSerial.println("Read df cmd  failed!");
-        return false;
-    }
-
-    if(this->printResults){
-      for(uint8_t i = 0; i < len; i++) {
-          if (data[i] < 0x10) {
-              dbgSerial.print("0");
-          }
-          dbgSerial.print(data[i], HEX);
-          if (i < len - 1) {
-              dbgSerial.print(" ");
-          }
-      }
-      dbgSerial.println();
-    }
-    return true; 
-}
-
-bool BQ4050::rd_df_da_configuration(uint8_t *data, uint8_t len) {
-    if (!wd_mac_cmd(DF_CMD_DA_CONFIGURATION)) {
-        dbgSerial.println("Write df cmd failed!");
-        return false;
-    }
-    delay(18);
-    if (!rd_df_block(DF_CMD_DA_CONFIGURATION, data, len, false)) {
-        dbgSerial.println("Read df cmd  failed!");
-        return false;
-    }
-
-    if(this->printResults){
-      for(uint8_t i = 0; i < len; i++) {
-          if (data[i] < 0x10) {
-              dbgSerial.print("0");
-          }
-          dbgSerial.print(data[i], HEX);
-          if (i < len - 1) {
-              dbgSerial.print(" ");
-          }
-      }
-      dbgSerial.println();
-    }
-
-    return true; 
-}
-
-bool BQ4050::rd_df_learned_cap(uint8_t *data, uint8_t len) {
-    if (!wd_mac_cmd(DF_CMD_LEARNED_CAPACITY)) {
-        dbgSerial.println("Write df cmd failed!");
-        return false;
-    }
-    delay(18);
-    if (!rd_df_block(DF_CMD_LEARNED_CAPACITY, data, len, false)) {
-        dbgSerial.println("Read df cmd  failed!");
-        return false;
-    }
-
-    if(this->printResults){
-      for(uint8_t i = 0; i < len; i++) {
-          if (data[i] < 0x10) {
-              dbgSerial.print("0");
-          }
-          dbgSerial.print(data[i], HEX);
-          if (i < len - 1) {
-              dbgSerial.print(" ");
-          }
-      }
-      dbgSerial.println();
-    }
-
-    return true; 
-}
-
 bool BQ4050::fet_toggle(){
-    if(this->wd_mac_cmd(MAC_CMD_FET_CONTROL)) {
+    if(this->_wd_mac_cmd(MAC_CMD_FET_CONTROL)) {
         delay(500); // Wait for the device to process the command
         return true; // Return true if command was sent successfully
     }
@@ -491,7 +286,7 @@ bool BQ4050::fet_toggle(){
 }
 
 bool BQ4050::reset(){
-    if(this->wd_mac_cmd(MAC_CMD_DEV_RESET)) {
+    if(this->_wd_mac_cmd(MAC_CMD_DEV_RESET)) {
         delay(500); // Wait for the device to reset
         return true; // Return true if reset command was sent successfully
     }

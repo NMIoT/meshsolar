@@ -195,85 +195,31 @@ void loop() {
     }
 
 
-#if 1
+#if 0
     if(0 == cnt % 1000) {
-        uint16_t ret = 0;
-        bq4050.rd_df_learned_cap((uint8_t*)&ret, 2);
-        dbgSerial.print("rd_df_learned_cap: ");
-        dbgSerial.print(ret);
-        dbgSerial.println();
 
-
-
-        // uint8_t ret = 0;
-        // bq4050.rd_df_da_configuration(&ret, 1);
-        // dbgSerial.print("DA Configuration: ");
-        // dbgSerial.print(ret, HEX);
-        // dbgSerial.println();
-
-        // if(ret == 0x37) {
-        //     uint8_t df = 0x35;
-        //     bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
-        // } else {
-        //     uint8_t df = 0x37;
-        //     bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
+        bq4050_block_t block= {
+            .cmd = DF_CMD_LEARNED_CAPACITY,
+            .len = 2,
+            .pvalue =nullptr,
+            .type = NUMBER
+        };
+        // bq4050.read_mac_block(&block); 
+        // for(uint8_t i = 0; i < block.len; i++) {
+        //     if(block.pvalue[i] < 0x10) dbgSerial.print("0");
+        //     dbgSerial.print(block.pvalue[i], HEX);
+        //     dbgSerial.print(" ");
         // }
 
-
-
-        // uint8_t df = 0x37;
-        // bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
-
-
-        uint8_t df[11] = {0, };
-        bq4050.rd_fw_version(df, 11);
-        dbgSerial.print("Version: ");
-        for (uint8_t i = 0; i < 11; i++) {
-            if(df[i] < 0x10) dbgSerial.print("0");
-            dbgSerial.print(df[i], HEX);
-            dbgSerial.print(" ");
+        bq4050.read_dataflash_block(&block); 
+        dbgSerial.print("DF_CMD_LEARNED_CAPACITY: ");
+        for(uint8_t i = 0; i < block.len; i++) {
+            // if(0 == block.pvalue[i]) break; // Stop at null terminator
+            // dbgSerial.print((char)block.pvalue[i]); // Print as character
+            if(block.pvalue[i] < 0x10) dbgSerial.print("0");
+            dbgSerial.print(block.pvalue[i], HEX);
         }
         dbgSerial.println();
-
-
-
-
-
-
-
-
-
-
-        // uint16_t value = 0;
-        // if(rd_reg_word_with_pec(BQ4050_REG_VOLT, &value)) g_bat_sta.total_voltage = value / 1000.0f; 
-        // dbgSerial.print("Battery Total Voltage: ");
-        // dbgSerial.print(g_bat_sta.total_voltage, 2);
-
-        // bq4050_read_hw_version();
-        // rd_fw_version();
-
-        // DAStatus2_t temp = {0,};
-        // rd_cell_temp(&temp);
-        // dbgSerial.print("int temp: ");
-        // dbgSerial.println(temp.int_temp/10.0f - 273.15f);
-
-        // dbgSerial.print("ts1 temp: ");
-        // dbgSerial.println(temp.ts1_temp/10.0f - 273.15f);
-
-        // dbgSerial.print("ts2 temp: ");
-        // dbgSerial.println(temp.ts2_temp/10.0f - 273.15f);
-
-        // dbgSerial.print("ts3 temp: ");
-        // dbgSerial.println(temp.ts3_temp/10.0f - 273.15f);
-
-        // dbgSerial.print("ts4 temp: ");
-        // dbgSerial.println(temp.ts4_temp/10.0f - 273.15f);
-
-        // dbgSerial.print("Cell Temp: ");
-        // dbgSerial.println(temp.cell1_temp/10.0f - 273.15f);
-
-        // dbgSerial.print("fet temp: ");
-        // dbgSerial.println(temp.fet_temp/10.0f - 273.15f);
     }
 #endif
 
