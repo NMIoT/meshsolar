@@ -175,9 +175,195 @@ bool MeshSolar::bat_design_capacity_setting_update(){
 }
 
 bool MeshSolar::bat_cutoff_voltage_setting_update(){
+    bq4050_block_t block = { 0, 0, nullptr, NUMBER}, ret = {0, 0, nullptr, NUMBER};
+    bool res = true;      // Initialize result variable
+    uint16_t voltage = 0; // Set the cutoff voltage value = this->cmd.battery.cutoff_voltage + 100mV
+    /*************************************** Gas Gauging—>FD—>Set Voltage Threshold ******************************************/
+    voltage = this->cmd.battery.cutoff_voltage; // Set the cutoff voltage value
+    block.cmd = DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
 
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
 
-    return false;
+    ret.cmd = DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR; // Command to access learned capacity
+    ret.len = 2; // Length of the data block to read
+    ret.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (this->cmd.battery.cutoff_voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+    /*************************************** Gas Gauging—>FD—>Clear Voltage Threshold ******************************************/
+    voltage = this->cmd.battery.cutoff_voltage + 100; // Set the cutoff voltage value = this->cmd.battery.cutoff_voltage + 100mV
+
+    block.cmd = DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd     = DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR; // Command to access learned capacity
+    ret.pvalue  = nullptr; // Reset pointer to null
+    ret.len     = 2; // Length of the data block to read
+    ret.type    = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+    /*************************************** Gas Gauging—>TD—>Set Voltage Threshold ******************************************/
+    block.cmd = DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&this->cmd.battery.cutoff_voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR; // Command to access learned capacity
+    ret.len = 2; // Length of the data block to read
+    ret.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (this->cmd.battery.cutoff_voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+    /*************************************** Gas Gauging—>TD—>Clear Voltage Threshold ******************************************/
+    voltage = this->cmd.battery.cutoff_voltage + 100; // Set the cutoff voltage value = this->cmd.battery.cutoff_voltage + 100mV
+
+    block.cmd = DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd     = DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR; // Command to access learned capacity
+    ret.pvalue  = nullptr; // Reset pointer to null
+    ret.len     = 2; // Length of the data block to read
+    ret.type    = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+   /*************************************** Gas Gauging—>CEDV CFG—>Fixed EDV0 ******************************************/
+    voltage = this->cmd.battery.cutoff_voltage;
+
+    block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd     = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0; // Command to access learned capacity
+    ret.pvalue  = nullptr; // Reset pointer to null
+    ret.len     = 2; // Length of the data block to read
+    ret.type    = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0 after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+   /*************************************** Gas Gauging—>CEDV CFG—>Fixed EDV1 ******************************************/
+    voltage = this->cmd.battery.cutoff_voltage + 20;
+
+    block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd     = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1; // Command to access learned capacity
+    ret.pvalue  = nullptr; // Reset pointer to null
+    ret.len     = 2; // Length of the data block to read
+    ret.type    = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1 after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+   /*************************************** Gas Gauging—>CEDV CFG—>Fixed EDV2 ******************************************/
+    voltage = this->cmd.battery.cutoff_voltage + 30;
+
+    block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd     = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2; // Command to access learned capacity
+    ret.pvalue  = nullptr; // Reset pointer to null
+    ret.len     = 2; // Length of the data block to read
+    ret.type    = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2 after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+   /*************************************** Protections—>CUV—>Threshold ******************************************/
+    voltage = this->cmd.battery.cutoff_voltage -50;
+
+    block.cmd = DF_CMD_PROTECTIONS_CUV_THR; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd     = DF_CMD_PROTECTIONS_CUV_THR; // Command to access learned capacity
+    ret.pvalue  = nullptr; // Reset pointer to null
+    ret.len     = 2; // Length of the data block to read
+    ret.type    = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_CUV_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+   /*************************************** Protections—>CUV—>Recovery ******************************************/
+    voltage = this->cmd.battery.cutoff_voltage + 100;
+
+    block.cmd = DF_CMD_PROTECTIONS_CUV_RECOVERY; // Command to access learned capacity
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&voltage; 
+    block.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->write_dataflash_block(&block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd     = DF_CMD_PROTECTIONS_CUV_RECOVERY; // Command to access learned capacity
+    ret.pvalue  = nullptr; // Reset pointer to null
+    ret.len     = 2; // Length of the data block to read
+    ret.type    = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_CUV_RECOVERY after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (voltage == *(uint16_t*)(ret.pvalue)); // Check if the cutoff voltage was set correctly
+
+    return res;
 }
 
 bool MeshSolar::bat_voltage_thresholds_setting_update(){

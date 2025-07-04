@@ -176,6 +176,10 @@ void loop() {
                 dbgSerial.print("bat_design_capacity_setting_update result: ");
                 dbgSerial.println(res ? "Success" : "Failed");
 
+                res = meshsolar.bat_cutoff_voltage_setting_update();
+                dbgSerial.print("bat_cutoff_voltage_setting_update result: ");
+                dbgSerial.println(res ? "Success" : "Failed");
+
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {
                 meshsolar.bat_fet_toggle(); // Call the callback function for FET control
