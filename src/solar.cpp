@@ -31,14 +31,25 @@ void MeshSolar::begin(BQ4050 *device) {
 }
 
 bool MeshSolar::get_bat_status(){
+    bool res = false;
+    bq4050_reg_t reg = {0,0};
+
     // update status structure with battery information
-    this->sta.total_voltage  = this->_bq4050->rd_reg_word(BQ4050_REG_VOLT);
+    reg.addr = BQ4050_REG_VOLT; // Register address for total voltage
+    res = this->_bq4050->rd_reg_word(&reg);
+    this->sta.total_voltage  = (res) ? reg.value : this->sta.total_voltage; // Convert from mV to V
     delay(10); 
 
-    this->sta.charge_current = (int16_t)this->_bq4050->rd_reg_word(BQ4050_REG_CURRENT);
+
+    reg.addr = BQ4050_REG_CURRENT; // Register address for charge current
+    res = (int16_t)this->_bq4050->rd_reg_word(&reg);
+    this->sta.charge_current = (res) ? reg.value : this->sta.charge_current; // Convert from mA to A
     delay(10); 
 
-    this->sta.soc_gauge      = this->_bq4050->rd_reg_word(BQ4050_REG_RSOC); 
+
+    reg.addr = BQ4050_REG_RSOC; // Register address for state of charge
+    res = this->_bq4050->rd_reg_word(&reg); 
+    this->sta.soc_gauge = (res) ? reg.value : this->sta.soc_gauge; // Read state of charge
     delay(10); 
 
     uint8_t da = 0;
@@ -64,12 +75,17 @@ bool MeshSolar::get_bat_status(){
     for (uint8_t i = 0; i < this->sta.cell_count; i++) {
         this->sta.cells[i].cell_num = i + 1;
         uint8_t cell_reg = BQ4050_CELL1_VOLTAGE - i;// Cell1=0x3F, Cell2=0x3E, Cell3=0x3D, Cell4=0x3C
-        this->sta.cells[i].voltage = this->_bq4050->rd_reg_word(cell_reg); 
+        reg.addr = cell_reg; // Set the register address for the cell voltage
+        res = this->_bq4050->rd_reg_word(&reg); 
+        this->sta.cells[i].voltage = (res) ? reg.value : this->sta.cells[i].voltage; // Convert from mV to V
         delay(10); 
     }
 
     // update learned capacity
-    this->sta.learned_capacity = this->_bq4050->rd_reg_word(BQ4050_REG_FCC); 
+    reg.addr = BQ4050_REG_FCC; // Register address for learned capacity
+    res  = this->_bq4050->rd_reg_word(&reg);
+    this->sta.learned_capacity = (res) ? reg.value : this->sta.learned_capacity; // Check if learned capacity is valid
+
     delay(10); 
     return true; // Return true to indicate status update was successful
 }

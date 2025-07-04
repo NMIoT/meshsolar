@@ -48,6 +48,19 @@
 #define DF_CMD_LEARNED_CAPACITY     0x4100
 
 
+
+typedef struct{
+    uint8_t  addr;
+    uint16_t value;
+}bq4050_reg_t;
+
+typedef struct{
+    uint16_t  cmd;     // command to access the data block
+    uint8_t   len;     // Length of the data block
+    uint8_t   *pblcok; // Pointer to the data block
+}bq4050_block_t;
+
+
 class BQ4050{
 private:
     SoftwareWire *wire;
@@ -76,10 +89,10 @@ public:
         this->wire->begin();
     }
 
-    uint16_t rd_reg_word(uint8_t reg);
-    void wd_reg_word(uint8_t reg, uint16_t value);
+    bool rd_reg_word(bq4050_reg_t *reg);
+    bool wd_reg_word(bq4050_reg_t reg);
 
-    bool rd_mac_block(uint8_t *data, uint8_t arrLen = 32, bool withPEC = false);
+    bool rd_mac_block(uint8_t *data, uint8_t arrLen = 32);
     bool rd_df_block(uint16_t cmd,  uint8_t *data, uint8_t arrLen = 32, bool isString = false);
     bool wd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen);
     bool wd_mac_cmd(uint16_t cmd);

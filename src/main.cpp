@@ -195,11 +195,11 @@ void loop() {
     }
 
 
-#if 0
+#if 1
     if(0 == cnt % 1000) {
         uint16_t ret = 0;
         bq4050.rd_df_learned_cap((uint8_t*)&ret, 2);
-        dbgSerial.print(" rd_df_learned_cap: ");
+        dbgSerial.print("rd_df_learned_cap: ");
         dbgSerial.print(ret);
         dbgSerial.println();
 
@@ -225,14 +225,15 @@ void loop() {
         // bq4050.wd_df_block(DF_CMD_DA_CONFIGURATION, &df, 1);
 
 
-        // bq4050.rd_hw_version(df, 2);
-        // dbgSerial.print(" Version: ");
-        // for (uint8_t i = 0; i < 2; i++) {
-        //     if(df[i] < 0x10) dbgSerial.print("0");
-        //     dbgSerial.print(df[i], HEX);
-        //     dbgSerial.print(" ");
-        // }
-        // dbgSerial.println();
+        uint8_t df[11] = {0, };
+        bq4050.rd_fw_version(df, 11);
+        dbgSerial.print("Version: ");
+        for (uint8_t i = 0; i < 11; i++) {
+            if(df[i] < 0x10) dbgSerial.print("0");
+            dbgSerial.print(df[i], HEX);
+            dbgSerial.print(" ");
+        }
+        dbgSerial.println();
 
 
 
