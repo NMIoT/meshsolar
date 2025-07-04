@@ -3,10 +3,8 @@
 #include "SoftwareWire.h"
 
 #define dbgSerial           Serial2
-#define comSerial           Serial
 
 #define BQ4050ADDR          0x0B
-
 
 #define BLOCK_ACCESS_CMD            (0x44)
 
@@ -86,9 +84,6 @@ public:
     bool wd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen);
     bool wd_mac_cmd(uint16_t cmd);
     
-
-
-
     bool rd_hw_version(uint8_t *data, uint8_t len);
     bool rd_fw_version(uint8_t *data, uint8_t len);
     bool rd_df_dev_name(uint8_t *df, uint8_t len);
@@ -99,23 +94,6 @@ public:
     bool rd_cell_temp(uint8_t *data, uint8_t len);
     bool fet_toggle();
     bool reset();
-
-
-
-
-
-    // bool wd_mac_cmd(uint16_t cmd);
-    // bool rd_mac_block(uint16_t cmd, uint8_t *data, size_t len);
-    // bool rd_reg_word_with_pec(uint8_t reg, uint16_t *value);
-    // void wd_reg_word(uint8_t reg, uint16_t value);
-    // bool bq4050_read_hw_version();
-    // bool rd_fw_version();
-    // bool rd_df_dev_name(uint8_t *df, uint8_t len);
-    // bool bq4050_fet_control();
-    // bool bq4050_reset();
-
-
-
 };
 
 

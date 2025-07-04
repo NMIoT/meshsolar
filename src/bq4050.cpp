@@ -52,18 +52,17 @@ uint8_t BQ4050::compute_crc8(uint8_t *bytes, int byteLen){
     crc = (uint8_t)(this->crctable[data]);
     if (this->printResults)
     {
-      comSerial.print("uint8_t value: ");
-      comSerial.print(bytes[i], HEX);
-      comSerial.print("\tlookup position: ");
-      comSerial.print(data, HEX);
-      comSerial.print("\tlookup value: ");
-      comSerial.println(crc, HEX);
+      dbgSerial.print("uint8_t value: ");
+      dbgSerial.print(bytes[i], HEX);
+      dbgSerial.print("\tlookup position: ");
+      dbgSerial.print(data, HEX);
+      dbgSerial.print("\tlookup value: ");
+      dbgSerial.println(crc, HEX);
     }
   }
 
   return crc;
 }
-
 
 uint16_t BQ4050::rd_reg_word(uint8_t reg){
     this->wire->beginTransmission(this->devAddr);
@@ -79,7 +78,6 @@ uint16_t BQ4050::rd_reg_word(uint8_t reg){
     return 0xFFFF;
 }
 
-
 void BQ4050::wd_reg_word(uint8_t reg, uint16_t value){
   this->wire->beginTransmission(this->devAddr);
   this->wire->write(reg);
@@ -89,10 +87,38 @@ void BQ4050::wd_reg_word(uint8_t reg, uint16_t value){
   delay(10); // Wait for the device to process the command
   if (result != 0)
   {
-    comSerial.print("Write to register 0x");
-    comSerial.print(reg, HEX);
-    comSerial.println(" failed.");
+    dbgSerial.print("Write to register 0x");
+    dbgSerial.print(reg, HEX);
+    dbgSerial.println(" failed.");
   }
+}
+
+bool BQ4050::wd_mac_cmd(uint16_t cmd){
+    //for simplicity, we create an array to hold all the byte we will be sending
+    uint8_t byteArr[5] = {
+        (uint8_t)(this->devAddr<<1),           // 
+        BLOCK_ACCESS_CMD,                   // 
+        0x02,                               // 
+        (uint8_t)(cmd & 0xFF),       // 
+        (uint8_t)((cmd >> 8) & 0xFF) // 
+    };
+    //This array is then sent to the CRC checker. The CRC includes all bytes sent.
+    //The arrSize var is static, so there are always 5 bytes to be sent
+    uint8_t PECcheck = this->compute_crc8( byteArr, sizeof(byteArr) );
+
+    this->wire->beginTransmission(this->devAddr);
+    //MAC access
+    this->wire->write( BLOCK_ACCESS_CMD );
+    //number of bytes in to be sent. In when sending a command, this is always 2
+    this->wire->write( 0x02 );
+    // delay(1);
+    //little endian of address
+    this->wire->write( cmd&0xFF );
+    this->wire->write((cmd>>8)&0xFF );
+    //send CRC at the end
+    this->wire->write( PECcheck );
+    uint8_t ack = this->wire->endTransmission();
+    return (ack == 0); // Return true if transmission was successful
 }
 
 bool BQ4050::rd_mac_block(uint8_t *data, uint8_t arrLen, bool withPEC) {
@@ -157,7 +183,6 @@ bool BQ4050::rd_mac_block(uint8_t *data, uint8_t arrLen, bool withPEC) {
 
     return false; 
 }
-
 
 bool BQ4050::wd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen) {
     // Prepare the command to write to the device
@@ -251,35 +276,33 @@ bool BQ4050::rd_df_block(uint16_t cmd, uint8_t *data, uint8_t arrLen, bool isStr
     return true; 
 }
 
+bool BQ4050::rd_cell_temp(uint8_t *data, uint8_t len) {
+    if (!wd_mac_cmd(MAC_CMD_DA_STATUS2)) {
+        dbgSerial.println("Write cell temp failed!");
+        return false;
+    }
+    delay(18);
+    len+=2;
+    if (!rd_mac_block(data, len, true)) {
+        dbgSerial.println("Read cell temp  failed!");
+        return false;
+    }
 
-bool BQ4050::wd_mac_cmd(uint16_t cmd){
-    //for simplicity, we create an array to hold all the byte we will be sending
-    uint8_t byteArr[5] = {
-        (uint8_t)(this->devAddr<<1),           // 
-        BLOCK_ACCESS_CMD,                   // 
-        0x02,                               // 
-        (uint8_t)(cmd & 0xFF),       // 
-        (uint8_t)((cmd >> 8) & 0xFF) // 
-    };
-    //This array is then sent to the CRC checker. The CRC includes all bytes sent.
-    //The arrSize var is static, so there are always 5 bytes to be sent
-    uint8_t PECcheck = this->compute_crc8( byteArr, sizeof(byteArr) );
+    if(this->printResults){
+      for(uint8_t i = 0; i < len; i++) {
+          if (data[i] < 0x10) {
+              dbgSerial.print("0");
+          }
+          dbgSerial.print(data[i], HEX);
+          if (i < len - 1) {
+              dbgSerial.print(" ");
+          }
+      }
+      dbgSerial.println();
+    }
 
-    this->wire->beginTransmission(this->devAddr);
-    //MAC access
-    this->wire->write( BLOCK_ACCESS_CMD );
-    //number of bytes in to be sent. In when sending a command, this is always 2
-    this->wire->write( 0x02 );
-    // delay(1);
-    //little endian of address
-    this->wire->write( cmd&0xFF );
-    this->wire->write((cmd>>8)&0xFF );
-    //send CRC at the end
-    this->wire->write( PECcheck );
-    uint8_t ack = this->wire->endTransmission();
-    return (ack == 0); // Return true if transmission was successful
+    return true;
 }
-
 
 bool BQ4050::rd_fw_version(uint8_t *data, uint8_t len) {
     // uint8_t data[11 + 2] = {0,}; // 11 bytes for firmware version + 1 byte for data length + 1 byte for PEC
@@ -338,10 +361,6 @@ bool BQ4050::rd_hw_version(uint8_t *data, uint8_t len) {
 
     return true;
 }
-
-
-
-
 
 bool BQ4050::rd_df_dev_name(uint8_t *data, uint8_t len) {
     if (!wd_mac_cmd(DF_CMD_DEVICE_NAME)) {
@@ -449,40 +468,6 @@ bool BQ4050::rd_df_learned_cap(uint8_t *data, uint8_t len) {
 
     return true; 
 }
-
-
-
-
-
-bool BQ4050::rd_cell_temp(uint8_t *data, uint8_t len) {
-    if (!wd_mac_cmd(MAC_CMD_DA_STATUS2)) {
-        dbgSerial.println("Write cell temp failed!");
-        return false;
-    }
-    delay(18);
-    len+=2;
-    if (!rd_mac_block(data, len, true)) {
-        dbgSerial.println("Read cell temp  failed!");
-        return false;
-    }
-
-    if(this->printResults){
-      for(uint8_t i = 0; i < len; i++) {
-          if (data[i] < 0x10) {
-              dbgSerial.print("0");
-          }
-          dbgSerial.print(data[i], HEX);
-          if (i < len - 1) {
-              dbgSerial.print(" ");
-          }
-      }
-      dbgSerial.println();
-    }
-
-    return true;
-}
-
-
 
 bool BQ4050::fet_toggle(){
     if(this->wd_mac_cmd(MAC_CMD_FET_CONTROL)) {
