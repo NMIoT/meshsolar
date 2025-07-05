@@ -78,7 +78,8 @@ public:
     bool bat_model_setting_update();
     bool bat_cells_setting_update ();
     bool bat_design_capacity_setting_update();
-    bool bat_cutoff_voltage_setting_update();
+    bool bat_discharge_cutoff_voltage_setting_update();
+    bool bat_charge_cutoff_voltage_setting_update();
     bool bat_voltage_thresholds_setting_update();
     bool bat_charge_over_voltage_setting_update();
     bool bat_discharge_over_heat_setting_update();

@@ -168,16 +168,21 @@ void loop() {
             /*  add some func call back here base on cmd sector */
             if (0 == strcmp(meshsolar.cmd.command, "config")) {
                 bool res = false;
+
+                res = meshsolar.bat_type_setting_update();
+                dbgSerial.print(">>>>>>> bat_type_setting_update result: ");
+                dbgSerial.println(res ? "Success" : "Failed");
+
                 res = meshsolar.bat_cells_setting_update();
-                dbgSerial.print("bat_cells_setting_update result: ");
+                dbgSerial.print(">>>>>>> bat_cells_setting_update result: ");
                 dbgSerial.println(res ? "Success" : "Failed");
 
                 res = meshsolar.bat_design_capacity_setting_update();
-                dbgSerial.print("bat_design_capacity_setting_update result: ");
+                dbgSerial.print(">>>>>>> bat_design_capacity_setting_update result: ");
                 dbgSerial.println(res ? "Success" : "Failed");
 
-                res = meshsolar.bat_cutoff_voltage_setting_update();
-                dbgSerial.print("bat_cutoff_voltage_setting_update result: ");
+                res = meshsolar.bat_discharge_cutoff_voltage_setting_update();
+                dbgSerial.print(">>>>>>> bat_discharge_cutoff_voltage_setting_update result: ");
                 dbgSerial.println(res ? "Success" : "Failed");
 
             }

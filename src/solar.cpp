@@ -90,10 +90,260 @@ bool MeshSolar::get_bat_status(){
     return true; // Return true to indicate status update was successful
 }
 
-bool MeshSolar::bat_type_setting_update(){
+bool MeshSolar::bat_type_setting_update(){ 
+    bq4050_block_t block = {0,0, nullptr, NUMBER}, ret = {0,0, nullptr, NUMBER}; // Initialize block structures
+    bool res = true; // Initialize result variable
 
+    struct{
+        uint16_t low_temp; // Initialize low temperature charge voltage
+        uint16_t std_temp; // Initialize standard temperature charge voltage
+        uint16_t high_temp; // Initialize high temperature charge voltage
+        uint16_t rec_temp; // Initialize recommended charge voltage
+    }charge_volt, cov_thr, cov_recovery_thr; // Initialize charge voltage and thresholds
 
-    return false;
+    if(0 == strcmp(this->cmd.battery.type, "lifepo4")) {
+        charge_volt.high_temp = 3600; // Set high temperature charge voltage for LiFePO4
+        charge_volt.std_temp = 3600; // Set standard temperature charge voltage for Li
+        charge_volt.low_temp = 3600; // Set low temperature charge voltage for LiFePO4
+        charge_volt.rec_temp = 3600; // Set recommended charge voltage for LiFePO4
+        
+        cov_thr.high_temp = 3750; // Set high temperature cutoff voltage for LiFePO4
+        cov_thr.std_temp = 3750; // Set standard temperature cutoff voltage for LiFePO4
+        cov_thr.low_temp = 3750; // Set low temperature cutoff voltage for LiFePO4
+        cov_thr.rec_temp = 3750; // Set recommended cutoff voltage for LiFePO4
+
+        cov_recovery_thr.high_temp = 3600; // Set high temperature recovery voltage for LiFePO4
+        cov_recovery_thr.std_temp = 3600; // Set standard temperature recovery voltage for LiFePO4
+        cov_recovery_thr.low_temp = 3600; // Set low temperature recovery voltage for
+        cov_recovery_thr.rec_temp = 3600; // Set recommended recovery voltage for LiFePO4
+    }
+    else if((0 == strcmp(this->cmd.battery.type, "liion")) || (0 == strcmp(this->cmd.battery.type, "lipo")))  {
+        charge_volt.high_temp = 4200; // Set high temperature charge voltage for Li-ion
+        charge_volt.std_temp = 4200; // Set standard temperature charge voltage for Li
+        charge_volt.low_temp = 4200; // Set low temperature charge voltage for Li-ion
+        charge_volt.rec_temp = 4200; // Set recommended charge voltage for Li-ion
+
+        cov_thr.high_temp = 4300; // Set high temperature cutoff voltage for Li-ion
+        cov_thr.std_temp = 4300; // Set standard temperature cutoff voltage for Li-ion
+        cov_thr.low_temp = 4300; // Set low temperature cutoff voltage for Li-ion
+        cov_thr.rec_temp = 4300; // Set recommended cutoff voltage for Li-ion
+
+        cov_recovery_thr.high_temp = 4100; // Set high temperature recovery voltage for Li-ion
+        cov_recovery_thr.std_temp = 4100; // Set standard temperature recovery voltage for Li-ion
+        cov_recovery_thr.low_temp = 4100; // Set low temperature recovery voltage for Li-ion
+        cov_recovery_thr.rec_temp = 4100; // Set recommended recovery voltage for Li-ion
+    }
+    else {
+        dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        return false; // Exit if the battery type is unknown
+    }
+    /*************************************** advanced charge algorithm —>low temp charging—>voltage ******************************************/
+    block.cmd = DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&charge_volt.low_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2; // Length of the data block to read
+    ret.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (charge_volt.low_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* advanced charge algorithm —>standard temp charging—>voltage **************************************/
+    block.cmd = DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&charge_volt.std_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2; // Length of the data block to read
+    ret.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (charge_volt.std_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* advanced charge algorithm —>high temp charging—>voltage **************************************/
+    block.cmd = DF_CMD_ADVANCED_CHARGE_ALG_HIGH_TEMP_CHARG_VOL; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&charge_volt.high_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2; // Length of the data block to read
+    ret.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_ADVANCED_CHARGE_ALG_HIGH_TEMP_CHARG_VOL after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (charge_volt.high_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* advanced charge algorithm —>rec temp charging—>voltage **************************************/
+    block.cmd = DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&charge_volt.rec_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (charge_volt.rec_temp == *(uint16_t*)(ret.pvalue));
+ 
+    /************************************* Protections—>COV—>Threshold low Temp **************************************/
+    block.cmd = DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&cov_thr.low_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (cov_thr.low_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* Protections—>COV—>Threshold std Temp **************************************/
+    block.cmd = DF_CMD_PROTECTIONS_COV_STD_TEMP_THR; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&cov_thr.std_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_COV_STD_TEMP_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (cov_thr.std_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* Protections—>COV—>Threshold high Temp **************************************/
+    block.cmd = DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&cov_thr.high_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (cov_thr.high_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* Protections—>COV—>Threshold rec Temp **************************************/
+    block.cmd = DF_CMD_PROTECTIONS_COV_REC_TEMP_THR; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&cov_thr.rec_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_COV_REC_TEMP_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (cov_thr.rec_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* Protections—>COV—>Recovery low Temp **************************************/
+    block.cmd = DF_CMD_PROTECTIONS_CUV_RECOVERY_LOW_TEMP_THR; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&cov_recovery_thr.low_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_CUV_RECOVERY_LOW_TEMP_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (cov_recovery_thr.low_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* Protections—>COV—>Recovery std Temp **************************************/
+    block.cmd = DF_CMD_PROTECTIONS_CUV_RECOVERY_STD_TEMP_THR; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&cov_recovery_thr.std_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_CUV_RECOVERY_STD_TEMP_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (cov_recovery_thr.std_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* Protections—>COV—>Recovery high Temp **************************************/
+    block.cmd = DF_CMD_PROTECTIONS_CUV_RECOVERY_HIGH_TEMP_THR; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&cov_recovery_thr.high_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_CUV_RECOVERY_HIGH_TEMP_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (cov_recovery_thr.high_temp == *(uint16_t*)(ret.pvalue));
+    /************************************* Protections—>COV—>Recovery rec Temp **************************************/
+    block.cmd = DF_CMD_PROTECTIONS_CUV_RECOVERY_REC_TEMP_THR; 
+    block.len = 2; 
+    block.pvalue = (uint8_t*)&cov_recovery_thr.rec_temp;
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; 
+    ret.len = 2;         
+    ret.type = NUMBER;   // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_PROTECTIONS_CUV_RECOVERY_REC_TEMP_THR after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mV");
+    res &= (cov_recovery_thr.rec_temp == *(uint16_t*)(ret.pvalue));
+
+    return res;
 }
 
 bool MeshSolar::bat_model_setting_update() {
@@ -125,14 +375,13 @@ bool MeshSolar::bat_cells_setting_update() {
     ret.type = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret); // Read current DA configuration again
-    dbgSerial.print("DA Configuration after: 0x");
+    dbgSerial.print("DF_CMD_DA_CONFIGURATION after: 0x");
     dbgSerial.println(ret.pvalue[0], HEX);
 
     return (ret.pvalue[0] == block.pvalue[0]); // Return true if the DA configuration was set correctly
 }
 
 bool MeshSolar::bat_design_capacity_setting_update(){
-    // Set the battery capacity in mAh
     bq4050_block_t block = {0,0, nullptr, NUMBER}, ret = {0,0, nullptr, NUMBER}; // Initialize block structures
     bool res = true; // Initialize result variable
     /*************************************** Gas Gauging—>Design—>Design Capacity mAh ******************************************/
@@ -157,7 +406,7 @@ bool MeshSolar::bat_design_capacity_setting_update(){
     res &= (capacity == *(uint16_t*)(ret.pvalue));
     /*************************************** Gas Gauging—>Design—>Design Capacity cWh ******************************************/
     capacity = this->cmd.battery.design_capacity; // Set the design capacity value
-    capacity = this->sta.cell_count * 4.2 * capacity / 1000; // Convert mAh to cWh (assuming 4.2V per cell)
+    capacity = this->cmd.battery.cell_number * 4.2 * capacity / 1000; // Convert mAh to cWh (assuming 4.2V per cell)
 
     block.cmd = DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH; // Command to access design capacity in cWh
     block.len = 2; // Length of the data block to read
@@ -194,14 +443,20 @@ bool MeshSolar::bat_design_capacity_setting_update(){
     dbgSerial.print("DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY after: ");
     dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
     dbgSerial.println(" mAh");
-
     res &= (capacity == *(uint16_t*)(ret.pvalue));
-
 
     return res;
 }
 
-bool MeshSolar::bat_cutoff_voltage_setting_update(){
+bool MeshSolar::bat_charge_cutoff_voltage_setting_update(){
+ 
+
+
+
+    return false; // Return false as this function is not implemented yet
+}
+
+bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
     bq4050_block_t block = { 0, 0, nullptr, NUMBER}, ret = {0, 0, nullptr, NUMBER};
     bool res = true;      // Initialize result variable
     uint16_t voltage = 0; // Set the cutoff voltage value = this->cmd.battery.cutoff_voltage + 100mV
@@ -383,6 +638,7 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
 
     return res;
 }
+
 
 bool MeshSolar::bat_voltage_thresholds_setting_update(){
 
