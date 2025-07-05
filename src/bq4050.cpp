@@ -220,21 +220,21 @@ bool BQ4050::read_mac_block(bq4050_block_t *block) {
     return true;
 }
 
-bool BQ4050::write_dataflash_block(bq4050_block_t *block) {
+bool BQ4050::write_dataflash_block(bq4050_block_t block) {
     // Prepare the command to write to the device
     // According to manual: block = starting address + DF data block
     // Total bytes = 2 bytes for starting address + arrLen bytes for data
-    uint8_t totalBytes = 2 + block->len;
+    uint8_t totalBytes = 2 + block.len;
     
     this->wire->beginTransmission(this->devAddr);
     this->wire->write(BLOCK_ACCESS_CMD);
     this->wire->write(totalBytes); // Total number of bytes (address + data)
-    this->wire->write((uint8_t)(block->cmd & 0xFF)); // Starting address LSB
-    this->wire->write((uint8_t)((block->cmd >> 8) & 0xFF)); // Starting address MSB
+    this->wire->write((uint8_t)(block.cmd & 0xFF)); // Starting address LSB
+    this->wire->write((uint8_t)((block.cmd >> 8) & 0xFF)); // Starting address MSB
 
     // Write the DF data block
-    for (uint8_t i = 0; i < block->len; i++) {
-        this->wire->write(block->pvalue[i]);
+    for (uint8_t i = 0; i < block.len; i++) {
+        this->wire->write(block.pvalue[i]);
     }
 
     uint8_t result = this->wire->endTransmission();

@@ -98,49 +98,31 @@ bool MeshSolar::bat_type_setting_update(){
 
 bool MeshSolar::bat_model_setting_update() {
 
-
-
     return false;
 }
 
 
 bool MeshSolar::bat_cells_setting_update() {
     uint8_t cells_bits = 0b10;
-    bq4050_block_t block = {0, 0, nullptr, NUMBER}; // Initialize block structure for DA configuration
-    
+    bq4050_block_t block = {0, 0, nullptr, NUMBER}, ret = {0, 0, nullptr, NUMBER}; // Initialize block structures
+
     block.cmd = DF_CMD_DA_CONFIGURATION; // Command to access DA configuration
     block.len = 1; // Length of the data block to read
-    block.type = NUMBER; // Set block type to NUMBER
-
     this->_bq4050->read_dataflash_block(&block); // Read current DA configuration
-
-    dbgSerial.print("DA Configuration before: 0x");
-    dbgSerial.println(block.pvalue[0], HEX);
     delay(100); // Ensure the read is complete before modifying
-
-
-    if(this->cmd.battery.cell_number == 1)      cells_bits = 0b00;
-    else if(this->cmd.battery.cell_number == 2) cells_bits = 0b01;
-    else if(this->cmd.battery.cell_number == 3) cells_bits = 0b10;
-    else if(this->cmd.battery.cell_number == 4) cells_bits = 0b11;
-    else return false; // Invalid cell count, return false
+    cells_bits = (cells_bits > 3) ? 3 : this->cmd.battery.cell_number - 1; // Convert cell count to bits (0-3 for 1-4 cells)
 
     // Clear the last 2 bits first, then set new cell count bits
     block.pvalue[0] &= 0b11111100; // Clear bits 0 and 1 (last 2 bits)
     block.pvalue[0] |= cells_bits;  // Set new cell count bits
-    block.cmd = DF_CMD_DA_CONFIGURATION; // Command to access DA configuration
-    this->_bq4050->write_dataflash_block(&block);
-
+    block.cmd = block.cmd; // Command to access DA configuration
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the read is complete before modifying
 
-
-    bq4050_block_t ret;
-
     memset(&ret, 0, sizeof(ret)); // Reset block structure
-    ret.cmd = DF_CMD_DA_CONFIGURATION; // Command to access DA configuration
+    ret.cmd = block.cmd; // Command to access DA configuration
     ret.len = 1; // Length of the data block to read
     ret.type = NUMBER; // Set block type to NUMBER
-
 
     this->_bq4050->read_dataflash_block(&ret); // Read current DA configuration again
     dbgSerial.print("DA Configuration after: 0x");
@@ -151,27 +133,72 @@ bool MeshSolar::bat_cells_setting_update() {
 
 bool MeshSolar::bat_design_capacity_setting_update(){
     // Set the battery capacity in mAh
-    bq4050_block_t block = {
-        DF_CMD_LEARNED_CAPACITY, 
-        2, 
-        (uint8_t*)&this->cmd.battery.design_capacity, 
-        NUMBER
-    }; // Initialize block structure for DA configuration
-    
-    this->_bq4050->write_dataflash_block(&block);
+    bq4050_block_t block = {0,0, nullptr, NUMBER}, ret = {0,0, nullptr, NUMBER}; // Initialize block structures
+    bool res = true; // Initialize result variable
+    /*************************************** Gas Gauging—>Design—>Design Capacity mAh ******************************************/
+    uint16_t capacity = this->cmd.battery.design_capacity; // Set the design capacity value
+
+    block.cmd = DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH; // Command to access design capacity in mAh
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&capacity; // Pointer to the design capacity value
+
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    bq4050_block_t ret = {0, 0, nullptr, NUMBER}; // Initialize block structure for learned capacity
-    ret.cmd = DF_CMD_LEARNED_CAPACITY; // Command to access learned capacity
+    ret.cmd = block.cmd; // Command to access learned capacity
     ret.len = 2; // Length of the data block to read
     ret.type = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret);
-    dbgSerial.print(" Learned Capacity after: ");
+    dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH after: ");
     dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
     dbgSerial.println(" mAh");
 
-    return (this->cmd.battery.design_capacity == *(uint16_t*)(ret.pvalue)); // Return true if the design capacity was set correctly
+    res &= (capacity == *(uint16_t*)(ret.pvalue));
+    /*************************************** Gas Gauging—>Design—>Design Capacity cWh ******************************************/
+    capacity = this->cmd.battery.design_capacity; // Set the design capacity value
+    capacity = this->sta.cell_count * 4.2 * capacity / 1000; // Convert mAh to cWh (assuming 4.2V per cell)
+
+    block.cmd = DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH; // Command to access design capacity in cWh
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&capacity; // Pointer to the design capacity value
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; // Command to access learned capacity
+    ret.len = 2; // Length of the data block to read
+    ret.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" cWh");
+
+    res &= (capacity == *(uint16_t*)(ret.pvalue));
+    /*************************************** Gas Gauging—>State—>Learned Full Charge Capacity mAh ******************************************/
+    capacity = this->cmd.battery.design_capacity; // Set the design capacity value
+
+    block.cmd = DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY;
+    block.len = 2; // Length of the data block to read
+    block.pvalue = (uint8_t*)&capacity; // Pointer to the design capacity value
+
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the write is complete before reading
+
+    ret.cmd = block.cmd; // Command to access learned capacity
+    ret.len = 2; // Length of the data block to read
+    ret.type = NUMBER; // Set block type to NUMBER
+
+    this->_bq4050->read_dataflash_block(&ret);
+    dbgSerial.print("DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY after: ");
+    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    dbgSerial.println(" mAh");
+
+    res &= (capacity == *(uint16_t*)(ret.pvalue));
+
+
+    return res;
 }
 
 bool MeshSolar::bat_cutoff_voltage_setting_update(){
@@ -183,14 +210,12 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd = DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR; // Command to access learned capacity
+    ret.cmd = block.cmd; // Command to access learned capacity
     ret.len = 2; // Length of the data block to read
-    ret.type = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR after: ");
@@ -203,15 +228,15 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd     = DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR; // Command to access learned capacity
+    ret.cmd     = block.cmd; // Command to access learned capacity
     ret.pvalue  = nullptr; // Reset pointer to null
     ret.len     = 2; // Length of the data block to read
-    ret.type    = NUMBER; // Set block type to NUMBER
+
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR after: ");
@@ -222,14 +247,14 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&this->cmd.battery.cutoff_voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd = DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR; // Command to access learned capacity
+    ret.cmd = block.cmd; // Command to access learned capacity
     ret.len = 2; // Length of the data block to read
-    ret.type = NUMBER; // Set block type to NUMBER
+
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR after: ");
@@ -242,15 +267,15 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd     = DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR; // Command to access learned capacity
+    ret.cmd     = block.cmd; // Command to access learned capacity
     ret.pvalue  = nullptr; // Reset pointer to null
     ret.len     = 2; // Length of the data block to read
-    ret.type    = NUMBER; // Set block type to NUMBER
+
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR after: ");
@@ -263,15 +288,13 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd     = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0; // Command to access learned capacity
+    ret.cmd     = block.cmd; // Command to access learned capacity
     ret.pvalue  = nullptr; // Reset pointer to null
     ret.len     = 2; // Length of the data block to read
-    ret.type    = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0 after: ");
@@ -284,15 +307,15 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd     = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1; // Command to access learned capacity
+    ret.cmd     = block.cmd; // Command to access learned capacity
     ret.pvalue  = nullptr; // Reset pointer to null
     ret.len     = 2; // Length of the data block to read
-    ret.type    = NUMBER; // Set block type to NUMBER
+
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1 after: ");
@@ -305,15 +328,13 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd     = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2; // Command to access learned capacity
+    ret.cmd     = block.cmd; // Command to access learned capacity
     ret.pvalue  = nullptr; // Reset pointer to null
     ret.len     = 2; // Length of the data block to read
-    ret.type    = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2 after: ");
@@ -326,15 +347,14 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_PROTECTIONS_CUV_THR; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd     = DF_CMD_PROTECTIONS_CUV_THR; // Command to access learned capacity
+    ret.cmd     = block.cmd; // Command to access learned capacity
     ret.pvalue  = nullptr; // Reset pointer to null
     ret.len     = 2; // Length of the data block to read
-    ret.type    = NUMBER; // Set block type to NUMBER
+
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_PROTECTIONS_CUV_THR after: ");
@@ -347,15 +367,13 @@ bool MeshSolar::bat_cutoff_voltage_setting_update(){
     block.cmd = DF_CMD_PROTECTIONS_CUV_RECOVERY; // Command to access learned capacity
     block.len = 2; // Length of the data block to read
     block.pvalue = (uint8_t*)&voltage; 
-    block.type = NUMBER; // Set block type to NUMBER
 
-    this->_bq4050->write_dataflash_block(&block);
+    this->_bq4050->write_dataflash_block(block);
     delay(100); // Ensure the write is complete before reading
 
-    ret.cmd     = DF_CMD_PROTECTIONS_CUV_RECOVERY; // Command to access learned capacity
+    ret.cmd     = block.cmd; // Command to access learned capacity
     ret.pvalue  = nullptr; // Reset pointer to null
     ret.len     = 2; // Length of the data block to read
-    ret.type    = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret);
     dbgSerial.print("DF_CMD_PROTECTIONS_CUV_RECOVERY after: ");

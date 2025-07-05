@@ -57,6 +57,10 @@
 #define DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1  0x45a0
 #define DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2  0x4593
 
+#define DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH  0x444d // Design Capacity in mAh
+#define DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH  0x444f // Design Capacity in CWh
+#define DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY 0x4100 // State Learned Full Capacity
+
 #define DF_CMD_PROTECTIONS_CUV_THR            0x4481
 #define DF_CMD_PROTECTIONS_CUV_RECOVERY       0x4484
 
@@ -113,7 +117,7 @@ public:
     bool rd_reg_word(bq4050_reg_t *reg);
     bool wd_reg_word(bq4050_reg_t reg);
 
-    bool write_dataflash_block(bq4050_block_t *block);
+    bool write_dataflash_block(bq4050_block_t block);
     bool read_mac_block(bq4050_block_t *block);
     bool read_dataflash_block (bq4050_block_t *block);
     
