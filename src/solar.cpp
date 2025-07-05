@@ -2,7 +2,6 @@
 #include "solar.h"
 
 
-
 MeshSolar::MeshSolar(){
     this->_bq4050 = nullptr; // Initialize pointer to null
     memset(&this->sta, 0, sizeof(this->sta)); // Initialize status structure to zero
@@ -36,17 +35,17 @@ bool MeshSolar::get_bat_status(){
     bq4050_block_t block = {0,0,nullptr}; // Initialize block structure
     /********************************************** get pack total voltage *********************************************/
     reg.addr = BQ4050_REG_VOLT; // Register address for total voltage
-    res = this->_bq4050->rd_reg_word(&reg);
+    res = this->_bq4050->read_reg_word(&reg);
     this->sta.total_voltage  = (res) ? reg.value : this->sta.total_voltage; // Convert from mV to V
     delay(10); 
     /************************************************ get charge current ***********************************************/
     reg.addr = BQ4050_REG_CURRENT; // Register address for charge current
-    res = (int16_t)this->_bq4050->rd_reg_word(&reg);
+    res = (int16_t)this->_bq4050->read_reg_word(&reg);
     this->sta.charge_current = (res) ? reg.value : this->sta.charge_current; // Convert from mA to A
     delay(10); 
     /*************************************************** get soc gauge ************************************************/
     reg.addr = BQ4050_REG_RSOC; // Register address for state of charge
-    res = this->_bq4050->rd_reg_word(&reg); 
+    res = this->_bq4050->read_reg_word(&reg); 
     this->sta.soc_gauge = (res) ? reg.value : this->sta.soc_gauge; // Read state of charge
     delay(10); 
     /*************************************************** get bat cells ************************************************/
@@ -76,14 +75,14 @@ bool MeshSolar::get_bat_status(){
     for (uint8_t i = 0; i < this->sta.cell_count; i++) {
         this->sta.cells[i].cell_num = i + 1;
         reg.addr = BQ4050_CELL1_VOLTAGE - i; // Cell1=0x3F, Cell2=0x3E, Cell3=0x3D, Cell4=0x3C
-        res = this->_bq4050->rd_reg_word(&reg); 
+        res = this->_bq4050->read_reg_word(&reg); 
         this->sta.cells[i].voltage = (res) ? reg.value : this->sta.cells[i].voltage; // Convert from mV to V
         delay(10); 
     }
 
     /**************************************************** get learned capacity ********************************************/
     reg.addr = BQ4050_REG_FCC; 
-    res  = this->_bq4050->rd_reg_word(&reg);
+    res  = this->_bq4050->read_reg_word(&reg);
     this->sta.learned_capacity = (res) ? reg.value : this->sta.learned_capacity; 
 
     delay(10); 
@@ -241,11 +240,11 @@ bool MeshSolar::bat_model_setting_update() {
     return false;
 }
 
-
 bool MeshSolar::bat_cells_setting_update() {
+    bool res = true; // Initialize result variable
     uint8_t cells_bits = 0b10;
     bq4050_block_t block = {0, 0, nullptr, NUMBER}, ret = {0, 0, nullptr, NUMBER}; // Initialize block structures
-
+    /*************************************** setting—>configuration—>DA configuration—>CC1\CC0 ******************************************/
     block.cmd = DF_CMD_DA_CONFIGURATION; // Command to access DA configuration
     block.len = 1; // Length of the data block to read
     this->_bq4050->read_dataflash_block(&block); // Read current DA configuration
@@ -267,8 +266,39 @@ bool MeshSolar::bat_cells_setting_update() {
     this->_bq4050->read_dataflash_block(&ret); // Read current DA configuration again
     dbgSerial.print("DF_CMD_DA_CONFIGURATION after: 0x");
     dbgSerial.println(ret.pvalue[0], HEX);
+    res &= (ret.pvalue[0] == block.pvalue[0]);
+    /********************************************** Gauging—>Design—>Design Voltage *****************************************************/
+    uint16_t voltage = 0; // Initialize voltage variable
+    if(0 == strcasecmp(this->cmd.battery.type, "lifepo4")) {
+        voltage = 3600;
+    }
+    else if((0 == strcasecmp(this->cmd.battery.type, "liion")) || (0 == strcasecmp(this->cmd.battery.type, "lipo"))){
+        voltage = 4200;
+    }
+    else {
+        dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        return false;
+    }
+    voltage = this->cmd.battery.cell_number * voltage; // Set design voltage based on cell count
 
-    return (ret.pvalue[0] == block.pvalue[0]); // Return true if the DA configuration was set correctly
+    // Clear the last 2 bits first, then set new cell count bits
+    block.cmd = DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV; // Command to access DA configuration
+    block.pvalue = (uint8_t*)&voltage; // Pointer to the design voltage value
+    block.len = 2; // Length of the data block to read
+    this->_bq4050->write_dataflash_block(block);
+    delay(100); // Ensure the read is complete before modifying
+
+    memset(&ret, 0, sizeof(ret)); // Reset block structure
+    ret.cmd = block.cmd; // Command to access DA configuration
+    ret.len = 2; // Length of the data block to read
+
+    this->_bq4050->read_dataflash_block(&ret); // Read current DA configuration again
+    dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV after: 0x");
+    dbgSerial.println(ret.pvalue[0], HEX);
+    res &= (*(uint16_t*)(ret.pvalue) == voltage); // Verify the voltage setting
+
+
+    return res; 
 }
 
 bool MeshSolar::bat_design_capacity_setting_update(){
@@ -295,8 +325,19 @@ bool MeshSolar::bat_design_capacity_setting_update(){
 
     res &= (capacity == *(uint16_t*)(ret.pvalue));
     /*************************************** Gas Gauging—>Design—>Design Capacity cWh ******************************************/
+    float voltage = 0; // Initialize voltage variable
+    if(0 == strcasecmp(this->cmd.battery.type, "lifepo4")) {
+        voltage = 3.6f;
+    }
+    else if((0 == strcasecmp(this->cmd.battery.type, "liion")) || (0 == strcasecmp(this->cmd.battery.type, "lipo"))){
+        voltage = 4.2f;
+    }
+    else {
+        dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        return false;
+    }
     capacity = this->cmd.battery.design_capacity; // Set the design capacity value
-    capacity = this->cmd.battery.cell_number * 4.2 * capacity / 1000; // Convert mAh to cWh (assuming 4.2V per cell)
+    capacity = (uint16_t)(this->cmd.battery.cell_number * voltage * capacity / 10.0f); // Convert mAh to cWh (assuming 4.2V per cell)
 
     block.cmd = DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH; // Command to access design capacity in cWh
     block.len = 2; // Length of the data block to read
@@ -364,7 +405,15 @@ bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
 
     // Define base voltages from configuration
     uint16_t cutoff_base = this->cmd.battery.cutoff_voltage;
-    
+
+    // Configuration table: {command, voltage_offset, description}
+    struct cutoff_config_entry_t {
+        uint16_t cmd;
+        int16_t  offest;  // Offset from base cutoff voltage (can be negative)
+        const char* name;
+    };
+
+
     // Helper lambda function to write and verify voltage setting
     auto write_and_verify = [&](uint16_t cmd, uint16_t value, const char* name) -> bool {
         bq4050_block_t block = {cmd, 2, (uint8_t*)&value, NUMBER};
@@ -372,7 +421,7 @@ bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
 
         // Write the value
         if (!this->_bq4050->write_dataflash_block(block)) {
-            dbgSerial.print("Failed to write ");
+            dbgSerial.print("Failed to write :");
             dbgSerial.println(name);
             return false;
         }
@@ -380,7 +429,7 @@ bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
 
         // Read back and verify
         if (!this->_bq4050->read_dataflash_block(&ret)) {
-            dbgSerial.print("Failed to read back ");
+            dbgSerial.print("Failed to read back :");
             dbgSerial.println(name);
             return false;
         }
@@ -400,13 +449,6 @@ bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
             dbgSerial.println(" mV)");
             return false;
         }
-    };
-
-    // Configuration table: {command, voltage_offset, description}
-    struct cutoff_config_entry_t {
-        uint16_t cmd;
-        int16_t offest;  // Offset from base cutoff voltage (can be negative)
-        const char* name;
     };
 
     cutoff_config_entry_t configurations[] = {

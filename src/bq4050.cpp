@@ -50,8 +50,7 @@ uint8_t BQ4050::compute_crc8(uint8_t *bytes, int byteLen){
     uint8_t data = (uint8_t)(bytes[i] ^ crc);
     /* get current CRC value = remainder */
     crc = (uint8_t)(this->crctable[data]);
-    if (this->printResults)
-    {
+    if (this->printResults){
       dbgSerial.print("uint8_t value: ");
       dbgSerial.print(bytes[i], HEX);
       dbgSerial.print("\tlookup position: ");
@@ -64,7 +63,7 @@ uint8_t BQ4050::compute_crc8(uint8_t *bytes, int byteLen){
   return crc;
 }
 
-bool BQ4050::rd_reg_word(bq4050_reg_t *reg){
+bool BQ4050::read_reg_word(bq4050_reg_t *reg){
     this->wire->beginTransmission(this->devAddr);
     this->wire->write(reg->addr); // Register address
     this->wire->endTransmission();//send stop signal
@@ -78,7 +77,7 @@ bool BQ4050::rd_reg_word(bq4050_reg_t *reg){
     return false; // If we don't get 2 bytes, return false
 }
 
-bool BQ4050::wd_reg_word(bq4050_reg_t reg){
+bool BQ4050::write_reg_word(bq4050_reg_t reg){
   this->wire->beginTransmission(this->devAddr);
   this->wire->write(reg.addr); // Register address
   this->wire->write(reg.value & 0xFF);
@@ -266,11 +265,11 @@ bool BQ4050::write_dataflash_block(bq4050_block_t block) {
 }
 
 bool BQ4050::read_dataflash_block(bq4050_block_t *block) {
-    if (!_wd_mac_cmd(block->cmd)) {
+    if (!this->_wd_mac_cmd(block->cmd)) {
         dbgSerial.println("Write df cmd failed!");
         return false;
     }
-    if (!_rd_df_block(block)) {
+    if (!this->_rd_df_block(block)) {
         dbgSerial.println("Read df cmd  failed!");
         return false;
     }

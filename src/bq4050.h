@@ -59,6 +59,7 @@
 
 #define DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH  0x444d        // Design Capacity in mAh
 #define DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH  0x444f        // Design Capacity in CWh
+#define DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV    0x4451        // Design Capacity in CWh per cell
 #define DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY 0x4100 // State Learned Full Capacity
 
 #define DF_CMD_PROTECTIONS_CUV_THR            0x4481
@@ -133,21 +134,14 @@ public:
         this->wire->begin();
     }
 
-    bool rd_reg_word(bq4050_reg_t *reg);
-    bool wd_reg_word(bq4050_reg_t reg);
+    bool read_reg_word(bq4050_reg_t *reg);
+    bool write_reg_word(bq4050_reg_t reg);
+
+    bool read_mac_block(bq4050_block_t *block);
 
     bool write_dataflash_block(bq4050_block_t block);
-    bool read_mac_block(bq4050_block_t *block);
     bool read_dataflash_block (bq4050_block_t *block);
     
-    // bool rd_hw_version(uint8_t *data, uint8_t len);
-    // bool rd_fw_version();
-    // bool rd_df_dev_name(uint8_t *df, uint8_t len);
-    // bool rd_df_manufacturer_name(uint8_t *df, uint8_t len);
-    // bool rd_df_da_configuration(uint8_t *data, uint8_t len);
-    // bool rd_df_learned_cap(uint8_t *data, uint8_t len);
-    // bool rd_cell_temp(uint8_t *data, uint8_t len);
-
     bool fet_toggle();
     bool reset();
 };

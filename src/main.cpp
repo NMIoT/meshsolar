@@ -191,7 +191,7 @@ void loop() {
                 dbgSerial.println("FET Toggle Command Received.");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "reset")) {
-                meshsolar.bat_reset(); // Call the callback function for reset
+                meshsolar.bat_reset();      // Call the callback function for reset
                 dbgSerial.println("Resetting BQ4050...");
             }
             else{
