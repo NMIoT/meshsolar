@@ -14,9 +14,15 @@ BQ4050       bq4050(false);
 MeshSolar    meshsolar;   // Create an instance of MeshSolar
 
 
-// {"command":"config","battery":{"type":"LiFePO4","cell_number":4,"design_capacity":3200,"cutoff_voltage":2800},"temperature_protection":{"high_temp_c":60,"high_temp_enabled":true,"low_temp_c":-10,"low_temp_enabled":true}}
+// {"command":"config","battery":{"type":"liion","cell_number":2,"design_capacity":3001,"cutoff_voltage":2551},"temperature_protection":{"discharge_high_temp_c":61,"discharge_low_temp_c":1,"charge_high_temp_c":41,"charge_low_temp_c":1,"temp_enabled":false}}
+
+// {"command":"advance","battery":{"cuv":2701,"eoc":4201,"eoc_protect":4351},"cedv":{"cedv0":2561,"cedv1":2571,"cedv2":2581,"discharge_cedv0":4151,"discharge_cedv10":4051,"discharge_cedv20":4001,"discharge_cedv30":3901,"discharge_cedv40":3851,"discharge_cedv50":3801,"discharge_cedv60":3651,"discharge_cedv70":3551,"discharge_cedv80":3501,"discharge_cedv90":3301,"discharge_cedv100":2561}}
 
 // {"command":"status","soc_gauge": 50,"charge_current": 500,"total_voltage": 12.5,"learned_capacity": 6.6,"cells": [{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7},{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7}]}
+
+// {"command":"sync","times":3}
+
+// {"command":"reset"}
 
 // static void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
 //     if (strcmp(cmd->command, "config") == 0) {
@@ -193,6 +199,10 @@ void loop() {
             else if (0 == strcmp(meshsolar.cmd.command, "reset")) {
                 meshsolar.bat_reset();      // Call the callback function for reset
                 dbgSerial.println("Resetting BQ4050...");
+            }
+            else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
+                
+                dbgSerial.println("Sync Command Received.");
             }
             else{
                 dbgSerial.print("Unknown command: ");
