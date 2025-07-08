@@ -246,9 +246,7 @@ void loop() {
 
     input = ""; // Reset input for new command
     if(listenString(input, '\n')) {
-        // Now LOG_I can handle long strings properly due to enhanced底层implementation
-        LOG_I("%s", input.c_str());
-        // Serial2.println(input); // Print the input to Serial2 for debugging
+        LOG_D("%s", input.c_str());
         bool res = parseJsonCommand(input.c_str(), &meshsolar.cmd); // Parse the command from input
         if (res) {
             // printMeshsolarCmd(&g_bat_cmd);

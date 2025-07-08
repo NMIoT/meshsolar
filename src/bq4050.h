@@ -70,8 +70,6 @@
 #define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100  0x45ba // CEDV Profile 1 Voltage 100
 
 
-
-
 #define DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH  0x444d        // Design Capacity in mAh
 #define DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH  0x444f        // Design Capacity in CWh
 #define DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV    0x4451        // Design Capacity in CWh per cell
@@ -80,11 +78,8 @@
 #define DF_CMD_PROTECTIONS_CUV_THR            0x4481
 #define DF_CMD_PROTECTIONS_CUV_RECOVERY       0x4484
 
-
-
 #define DF_CMD_PROTECTIONS_COV_THR            0x4481
 #define DF_CMD_PROTECTIONS_COV_RECOVERY       0x4484
-
 
 #define DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR   0x4486
 #define DF_CMD_PROTECTIONS_COV_STD_TEMP_THR   0x4488
