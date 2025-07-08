@@ -100,6 +100,7 @@ namespace dbg
 
 	/**
 	 * @brief Macro to print the debug log line with the specified level, color, format, and arguments.
+	 * Enhanced to handle long strings by using Serial2.print() instead of printf to avoid buffer limitations.
 	 * 
 	 * @param auto_new_line Flag indicating whether to print a new line after the log line.
 	 * @param lvl Debug level.
@@ -111,7 +112,9 @@ namespace dbg
 							do \
 							{ \
 								_DBG_LOG_HDR(auto_new_line, lvl, color_n);\
-								Serial2.printf(fmt, ##__VA_ARGS__); \
+								char _temp_buf[512]; \
+								snprintf(_temp_buf, sizeof(_temp_buf), fmt, ##__VA_ARGS__); \
+								Serial2.print(_temp_buf); \
 								if (auto_new_line) \
 								{ \
 									_DBG_LOG_X_END_NEWLINE; \
@@ -154,9 +157,10 @@ namespace dbg
 	#define LOG_L(fmt, ...)      dbg_log_line(true,"L", 36, fmt, ##__VA_ARGS__)
 	#define log_l(fmt, ...)      dbg_log_line(false, "L", 36, fmt, ##__VA_ARGS__)
 	#else
-	#define LOG_D(...)
-	#define log_d(...)
+	#define LOG_L(...)
+	#define log_l(...)
 	#endif
+	
 	/**
 	 * @brief Macro to print an informational log line with the specified format and arguments, only if the debug level is set to DBG_INFO or higher.
 	 */
@@ -189,7 +193,9 @@ namespace dbg
 	#else
 	#define LOG_E(...)
 	#define log_e(...)
+	#define LOG_E_LOC(...)
 	#endif
+
 } 
 
 #endif

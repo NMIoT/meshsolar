@@ -46,13 +46,12 @@ typedef struct {
     int     discharge_cedv80;  // Discharge CEDV at 80%
     int     discharge_cedv90;  // Discharge CEDV at 90%
     int     discharge_cedv100; // Discharge CEDV at 100%
-} cedv_config_t;
+} advance_cedv_config_t;
 
 // Advanced command structure
 typedef struct {
-    char                        command[16];        // Command type: "advance"
     advance_battery_config_t    battery;            // Advanced battery configuration
-    cedv_config_t               cedv;               // CEDV configuration
+    advance_cedv_config_t       cedv;               // CEDV configuration
 } advance_config_t;
 
 typedef struct {
@@ -112,19 +111,18 @@ public:
     ~MeshSolar();
     void begin(BQ4050 *device);
 
-    bool bat_type_setting_update();
-    bool bat_model_setting_update();
-    bool bat_cells_setting_update ();
-    bool bat_design_capacity_setting_update();
-    bool bat_discharge_cutoff_voltage_setting_update();
-    bool bat_temp_protection_setting_update(); // Update temperature protection settings
+    // Basic configuration functions
+    bool bat_basic_type_setting_update();
+    bool bat_basic_model_setting_update();
+    bool bat_basic_cells_setting_update ();
+    bool bat_basic_design_capacity_setting_update();
+    bool bat_basic_discharge_cutoff_voltage_setting_update();
+    bool bat_basic_temp_protection_setting_update(); // Update temperature protection settings
 
     // Advanced configuration functions
-    bool bat_cuv_setting_update();                    // Update Cell Under Voltage setting
-    bool bat_eoc_setting_update();                    // Update End of Charge voltage setting
-    bool bat_eoc_protect_setting_update();            // Update End of Charge protection setting
-    bool bat_cedv_settings_update();                  // Update all CEDV settings
-    
+    bool bat_advance_battery_config_update();
+    bool bat_advance_cedv_setting_update();
+
     bool bat_fet_toggle();
     bool bat_reset();
 

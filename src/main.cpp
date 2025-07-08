@@ -92,6 +92,51 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
         }
         cmd->fet_en = doc["fet_en"] | false;
     } 
+    else if (strcmp(cmd->command, "advance") == 0) {
+        if(doc["battery"].isNull() || doc["cedv"].isNull()) {
+            LOG_E("Missing 'battery' or 'cedv' field for 'advance' command");
+            return false;
+        }
+        JsonObject battery = doc["battery"];
+        JsonObject cedv = doc["cedv"];
+        if (!battery.containsKey("cuv") ||
+            !battery.containsKey("eoc") ||
+            !battery.containsKey("eoc_protect") ||
+            !cedv.containsKey("cedv0") ||
+            !cedv.containsKey("cedv1") ||
+            !cedv.containsKey("cedv2") ||
+            !cedv.containsKey("discharge_cedv0") ||
+            !cedv.containsKey("discharge_cedv10") ||
+            !cedv.containsKey("discharge_cedv20") ||
+            !cedv.containsKey("discharge_cedv30") ||
+            !cedv.containsKey("discharge_cedv40") ||
+            !cedv.containsKey("discharge_cedv50") ||
+            !cedv.containsKey("discharge_cedv60") ||
+            !cedv.containsKey("discharge_cedv70") ||
+            !cedv.containsKey("discharge_cedv80") ||
+            !cedv.containsKey("discharge_cedv90") ||
+            !cedv.containsKey("discharge_cedv100")) {
+                LOG_E("Missing fields in 'battery' or 'cedv'");
+                return false;
+        }
+        cmd->advance.battery.cuv            = battery["cuv"] | 0;
+        cmd->advance.battery.eoc            = battery["eoc"] | 0;
+        cmd->advance.battery.eoc_protect    = battery["eoc_protect"] | 0;
+        cmd->advance.cedv.cedv0             = cedv["cedv0"] | 0;
+        cmd->advance.cedv.cedv1             = cedv["cedv1"] | 0;
+        cmd->advance.cedv.cedv2             = cedv["cedv2"] | 0;
+        cmd->advance.cedv.discharge_cedv0   = cedv["discharge_cedv0"]  | 0;
+        cmd->advance.cedv.discharge_cedv10  = cedv["discharge_cedv10"] | 0;
+        cmd->advance.cedv.discharge_cedv20  = cedv["discharge_cedv20"] | 0;
+        cmd->advance.cedv.discharge_cedv30  = cedv["discharge_cedv30"] | 0;
+        cmd->advance.cedv.discharge_cedv40  = cedv["discharge_cedv40"] | 0;
+        cmd->advance.cedv.discharge_cedv50  = cedv["discharge_cedv50"] | 0;
+        cmd->advance.cedv.discharge_cedv60  = cedv["discharge_cedv60"] | 0;
+        cmd->advance.cedv.discharge_cedv70  = cedv["discharge_cedv70"] | 0;
+        cmd->advance.cedv.discharge_cedv80  = cedv["discharge_cedv80"] | 0;
+        cmd->advance.cedv.discharge_cedv90  = cedv["discharge_cedv90"] | 0;
+        cmd->advance.cedv.discharge_cedv100 = cedv["discharge_cedv100"]| 0;
+    } 
     else if (strcmp(cmd->command, "reset") == 0) {
 
     } 
@@ -99,14 +144,9 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
 
     }
     else {
-        // dbgSerial.println("Unknown command");
-        LOG_E("Unknown command");
+        LOG_E("Unknown command '%s'", cmd->command);
         return false;
     }
-
-
-
-
 
     return true;
 }
@@ -155,7 +195,7 @@ size_t meshsolarBasicConfigToJson(const basic_config_t *config, String& output) 
 
 size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& output) {
     StaticJsonDocument<512> doc;
-    doc["command"] = config->command;
+    doc["command"] = "advance";
 
     JsonObject battery = doc.createNestedObject("battery");
     battery["cuv"] = config->battery.cuv;
@@ -177,7 +217,6 @@ size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& outp
     cedv["discharge_cedv80"] = config->cedv.discharge_cedv80;
     cedv["discharge_cedv90"] = config->cedv.discharge_cedv90;
     cedv["discharge_cedv100"] = config->cedv.discharge_cedv100;
-
     output = "";
     return serializeJson(doc, output);
 }
@@ -207,7 +246,9 @@ void loop() {
 
     input = ""; // Reset input for new command
     if(listenString(input, '\n')) {
-        // LOG_I("%s", input.c_str());
+        // Now LOG_I can handle long strings properly due to enhanced底层implementation
+        LOG_I("%s", input.c_str());
+        // Serial2.println(input); // Print the input to Serial2 for debugging
         bool res = parseJsonCommand(input.c_str(), &meshsolar.cmd); // Parse the command from input
         if (res) {
             // printMeshsolarCmd(&g_bat_cmd);
@@ -215,31 +256,39 @@ void loop() {
             if (0 == strcmp(meshsolar.cmd.command, "config")) {
                 bool res = false;
 
-                res = meshsolar.bat_type_setting_update();
-                LOG_I(">>>>>>>>    bat_type_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.bat_basic_type_setting_update();
+                LOG_I(">>>>>>>>    bat_basic_type_setting_update result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_cells_setting_update();
-                LOG_I(">>>>>>>>    bat_cells_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.bat_basic_cells_setting_update();
+                LOG_I(">>>>>>>>    bat_basic_cells_setting_update result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_design_capacity_setting_update();
-                LOG_I(">>>>>>>>    bat_design_capacity_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.bat_basic_design_capacity_setting_update();
+                LOG_I(">>>>>>>>    bat_basic_design_capacity_setting_update result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_discharge_cutoff_voltage_setting_update();
-                LOG_I(">>>>>>>>    bat_discharge_cutoff_voltage_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.bat_basic_discharge_cutoff_voltage_setting_update();
+                LOG_I(">>>>>>>>    bat_basic_discharge_cutoff_voltage_setting_update result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_temp_protection_setting_update();
-                LOG_I(">>>>>>>>    bat_temp_protection_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.bat_basic_temp_protection_setting_update();
+                LOG_I(">>>>>>>>    bat_basic_temp_protection_setting_update result: %s", res ? "Success" : "Failed");
+
+
+            }
+            else if (0 == strcmp(meshsolar.cmd.command, "advance")) {
+                bool res = false;
+                res = meshsolar.bat_advance_battery_config_update();
+                LOG_I(">>>>>>>>    bat_advance_battery_config_update result: %s", res ? "Success" : "Failed");
+
+                res = meshsolar.bat_advance_cedv_setting_update();
+                LOG_I(">>>>>>>>    bat_advance_cedv_setting_update result: %s", res ? "Success" : "Failed");
 
 
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {
-                meshsolar.bat_fet_toggle(); // Call the callback function for FET control
-                // dbgSerial.println("FET Toggle Command Received.");
-                LOG_I("FET Toggle Command Received.");
+                meshsolar.bat_fet_toggle(); 
+                LOG_I("FET Toggle...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "reset")) {
-                meshsolar.bat_reset();      // Call the callback function for reset
-                // dbgSerial.println("Resetting BQ4050...");
+                meshsolar.bat_reset();      
                 LOG_I("Resetting BQ4050...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
@@ -256,17 +305,12 @@ void loop() {
                 //     dbgSerial.println(json); // Send the configuration back to the serial port
                 // }
 
-
-                // dbgSerial.println("Sync Command Received.");
                 LOG_I("Sync Command Received.");
             }
             else{
-                // dbgSerial.print("Unknown command: ");
                 LOG_E("Unknown command: %s", meshsolar.cmd.command);
-                // dbgSerial.println(meshsolar.cmd.command);
             }
         } else {
-            // dbgSerial.println("Failed to parse command");
             LOG_E("Failed to parse command");
         }
     }
@@ -308,30 +352,27 @@ void loop() {
         meshsolar.get_bat_realtime_status(); // Update the battery status
         meshsolar.get_bat_realtime_config(); // Update the battery configuration
 
-        dbgSerial.println("================================");        
-        dbgSerial.print("Battery Total Voltage: ");
-        dbgSerial.print(meshsolar.sta.total_voltage, 0);
-        dbgSerial.println(" mV");
+gSerial.println(" mV");
 
-        for (uint8_t i = 0; i < meshsolar.sta.cell_count; i++) {
-            dbgSerial.print("Cell ");
-            dbgSerial.print(meshsolar.sta.cells[i].cell_num);
-            dbgSerial.print(" Voltage: ");
-            dbgSerial.print(meshsolar.sta.cells[i].voltage, 0);
-            dbgSerial.println(" mV");
-        }
+        // for (uint8_t i = 0; i < meshsolar.sta.cell_count; i++) {
+        //     dbgSerial.print("Cell ");
+        //     dbgSerial.print(meshsolar.sta.cells[i].cell_num);
+        //     dbgSerial.print(" Voltage: ");
+        //     dbgSerial.print(meshsolar.sta.cells[i].voltage, 0);
+        //     dbgSerial.println(" mV");
+        // }
 
-        dbgSerial.print("Learned Capacity: ");
-        dbgSerial.print(meshsolar.sta.learned_capacity, 0);
-        dbgSerial.println(" mAh");
+        // dbgSerial.print("Learned Capacity: ");
+        // dbgSerial.print(meshsolar.sta.learned_capacity, 0);
+        // dbgSerial.println(" mAh");
 
-        dbgSerial.print("Charge Current: ");
-        dbgSerial.print(meshsolar.sta.charge_current);
-        dbgSerial.println(" mA");
+        // dbgSerial.print("Charge Current: ");
+        // dbgSerial.print(meshsolar.sta.charge_current);
+        // dbgSerial.println(" mA");
 
-        dbgSerial.print("State of Charge: ");
-        dbgSerial.print(meshsolar.sta.soc_gauge);
-        dbgSerial.println("%");
+        // dbgSerial.print("State of Charge: ");
+        // dbgSerial.print(meshsolar.sta.soc_gauge);
+        // dbgSerial.println("%");
     }
 #endif
 

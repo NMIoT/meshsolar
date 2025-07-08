@@ -137,7 +137,7 @@ bool MeshSolar::get_bat_realtime_config(){
     return true; // Return false to indicate configuration update was successful
 }
 
-bool MeshSolar::bat_type_setting_update(){ 
+bool MeshSolar::bat_basic_type_setting_update(){ 
     bool res = true;
 
     /*
@@ -234,24 +234,24 @@ bool MeshSolar::bat_type_setting_update(){
 
     config_entry_t configurations[] = {
         // Advanced charge algorithm voltages
-        {DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL,  config.charge_voltage.low_temp,  "DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL"},
-        {DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL,  config.charge_voltage.std_temp,  "DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL"},
+        {DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL,  config.charge_voltage.low_temp,  "DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL "},
+        {DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL,  config.charge_voltage.std_temp,  "DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL "},
         {DF_CMD_ADVANCED_CHARGE_ALG_HIGH_TEMP_CHARG_VOL, config.charge_voltage.high_temp, "DF_CMD_ADVANCED_CHARGE_ALG_HIGH_TEMP_CHARG_VOL"},
-        {DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL,  config.charge_voltage.rec_temp,  "DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL"},
+        {DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL,  config.charge_voltage.rec_temp,  "DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL "},
         
         // Protection COV thresholds
-        {DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR,  config.cov_threshold.low_temp,  "DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR"},
-        {DF_CMD_PROTECTIONS_COV_STD_TEMP_THR,  config.cov_threshold.std_temp,  "DF_CMD_PROTECTIONS_COV_STD_TEMP_THR"},
-        {DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR, config.cov_threshold.high_temp, "DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR"},
-        {DF_CMD_PROTECTIONS_COV_REC_TEMP_THR,  config.cov_threshold.rec_temp,  "DF_CMD_PROTECTIONS_COV_REC_TEMP_THR"},
+        {DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR,  config.cov_threshold.low_temp,             "DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR           "},
+        {DF_CMD_PROTECTIONS_COV_STD_TEMP_THR,  config.cov_threshold.std_temp,             "DF_CMD_PROTECTIONS_COV_STD_TEMP_THR           "},
+        {DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR, config.cov_threshold.high_temp,            "DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR          "},
+        {DF_CMD_PROTECTIONS_COV_REC_TEMP_THR,  config.cov_threshold.rec_temp,             "DF_CMD_PROTECTIONS_COV_REC_TEMP_THR           "},
         
         // Protection COV recovery
-        {DF_CMD_PROTECTIONS_CUV_RECOVERY_LOW_TEMP_THR,  config.cov_recovery.low_temp,  "DF_CMD_PROTECTIONS_CUV_RECOVERY_LOW_TEMP_THR"},
-        {DF_CMD_PROTECTIONS_CUV_RECOVERY_STD_TEMP_THR,  config.cov_recovery.std_temp,  "DF_CMD_PROTECTIONS_CUV_RECOVERY_STD_TEMP_THR"},
-        {DF_CMD_PROTECTIONS_CUV_RECOVERY_HIGH_TEMP_THR, config.cov_recovery.high_temp, "DF_CMD_PROTECTIONS_CUV_RECOVERY_HIGH_TEMP_THR"},
-        {DF_CMD_PROTECTIONS_CUV_RECOVERY_REC_TEMP_THR,  config.cov_recovery.rec_temp,  "DF_CMD_PROTECTIONS_CUV_RECOVERY_REC_TEMP_THR"},
-
+        {DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY,  config.cov_recovery.low_temp,     "DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY  "},
+        {DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY,  config.cov_recovery.std_temp,     "DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY  "},
+        {DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY, config.cov_recovery.high_temp,    "DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY "},
+        {DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY,  config.cov_recovery.rec_temp,     "DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY  "},
     };
+
 
     // Helper lambda function to write and verify voltage setting
     auto write_and_verify = [&](uint16_t cmd, uint16_t value, const char* name) -> bool {
@@ -260,8 +260,6 @@ bool MeshSolar::bat_type_setting_update(){
 
         // Write the value
         if (!this->_bq4050->write_dataflash_block(block)) {
-            // dbgSerial.print("Failed to write ");
-            // dbgSerial.println(name);
             LOG_E("Failed to write %s", name);
             return false;
         }
@@ -269,8 +267,6 @@ bool MeshSolar::bat_type_setting_update(){
 
         // Read back and verify
         if (!this->_bq4050->read_dataflash_block(&ret)) {
-            // dbgSerial.print("Failed to read back ");
-            // dbgSerial.println(name);
             LOG_E("Failed to read back %s", name);
             return false;
         }
@@ -330,12 +326,12 @@ bool MeshSolar::bat_type_setting_update(){
     return res;
 }
 
-bool MeshSolar::bat_model_setting_update() {
+bool MeshSolar::bat_basic_model_setting_update() {
 
     return false;
 }
 
-bool MeshSolar::bat_cells_setting_update() {
+bool MeshSolar::bat_basic_cells_setting_update() {
     bool res = true; // Initialize result variable
     uint8_t cells_bits = 0b10;
     bq4050_block_t block = {0, 0, nullptr, NUMBER}, ret = {0, 0, nullptr, NUMBER}; // Initialize block structures
@@ -399,7 +395,7 @@ bool MeshSolar::bat_cells_setting_update() {
     return res; 
 }
 
-bool MeshSolar::bat_design_capacity_setting_update(){
+bool MeshSolar::bat_basic_design_capacity_setting_update(){
     bq4050_block_t block = {0,0, nullptr, NUMBER}, ret = {0,0, nullptr, NUMBER}; // Initialize block structures
     bool res = true; // Initialize result variable
     /*************************************** Gas Gauging—>Design—>Design Capacity mAh ******************************************/
@@ -478,7 +474,7 @@ bool MeshSolar::bat_design_capacity_setting_update(){
     return res;
 }
 
-bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
+bool MeshSolar::bat_basic_discharge_cutoff_voltage_setting_update(){
     bool res = true;
     
     /*
@@ -535,21 +531,21 @@ bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
 
     cutoff_config_entry_t configurations[] = {
         // Gas Gauging - Final Discharge (FD) thresholds
-        {DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR,   0,    "FD Set Voltage Threshold"},      // Lowest discharge voltage
+        {DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR,   0,    "FD Set Voltage Threshold  "},      // Lowest discharge voltage
         {DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR, 100,  "FD Clear Voltage Threshold"},    // Recovery voltage (+100mV)
         
         // Gas Gauging - Terminate Discharge (TD) thresholds  
-        {DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR,   0,    "TD Set Voltage Threshold"},      // Same as FD set
+        {DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR,   0,    "TD Set Voltage Threshold  "},      // Same as FD set
         {DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR, 100,  "TD Clear Voltage Threshold"},    // Recovery voltage (+100mV)
         
         // Gas Gauging - End Discharge Voltage (EDV) stepped warnings
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0,  0,    "CEDV Fixed EDV0"},              // First warning level
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1,  20,   "CEDV Fixed EDV1"},              // Second warning (+20mV)
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2,  30,   "CEDV Fixed EDV2"},              // Third warning (+30mV)
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0,  0,    "CEDV Fixed EDV0           "},              // First warning level
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1,  20,   "CEDV Fixed EDV1           "},              // Second warning (+20mV)
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2,  30,   "CEDV Fixed EDV2           "},              // Third warning (+30mV)
         
         // Protection - Cell Under Voltage (CUV) hardware protection
-        {DF_CMD_PROTECTIONS_CUV_THR,           -50,   "CUV Protection Threshold"},      // Hardware cutoff (-50mV for safety margin)
-        {DF_CMD_PROTECTIONS_CUV_RECOVERY,      100,   "CUV Recovery Voltage"}           // Recovery to re-enable (+100mV)
+        {DF_CMD_PROTECTIONS_CUV_THR,           -50,   "CUV Protection Threshold  "},      // Hardware cutoff (-50mV for safety margin)
+        {DF_CMD_PROTECTIONS_CUV_RECOVERY,      100,   "CUV Recovery Voltage      "}           // Recovery to re-enable (+100mV)
     };
 
     // Apply all discharge cutoff configurations
@@ -561,7 +557,7 @@ bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
     return res;
 }
 
-bool MeshSolar::bat_temp_protection_setting_update() {
+bool MeshSolar::bat_basic_temp_protection_setting_update() {
     bool res = true;
     
     /*
@@ -604,21 +600,9 @@ bool MeshSolar::bat_temp_protection_setting_update() {
 
     // Validate temperature ranges (basic sanity check)
     if (charge_low >= charge_high || discharge_low >= discharge_high) {
-        // dbgSerial.println("ERROR: Invalid temperature ranges in configuration");
-        // dbgSerial.print("  Charge: ");
-        // dbgSerial.print(charge_low);
-        // dbgSerial.print("°C to ");
-        // dbgSerial.print(charge_high);
-        // dbgSerial.println("°C");
-        // dbgSerial.print("  Discharge: ");
-        // dbgSerial.print(discharge_low);
-        // dbgSerial.print("°C to ");
-        // dbgSerial.print(discharge_high);
-        // dbgSerial.println("°C");
         LOG_E("ERROR: Invalid temperature ranges in configuration");
         LOG_E("  Charge: %d°C to %d°C", charge_low, charge_high);
         LOG_E("  Discharge: %d°C to %d°C", discharge_low, discharge_high);
-
         return false;
     }
 
@@ -637,15 +621,15 @@ bool MeshSolar::bat_temp_protection_setting_update() {
 
     config_entry_t configurations[] = {
         // Charge temperature protections
-        {DF_CMD_PROTECTIONS_OTC_THR,      config.otc_threshold, "DF_CMD_PROTECTIONS_OTC_THR"},
+        {DF_CMD_PROTECTIONS_OTC_THR,      config.otc_threshold, "DF_CMD_PROTECTIONS_OTC_THR     "},
         {DF_CMD_PROTECTIONS_OTC_RECOVERY, config.otc_recovery,  "DF_CMD_PROTECTIONS_OTC_RECOVERY"},
-        {DF_CMD_PROTECTIONS_UTC_THR,      config.utc_threshold, "DF_CMD_PROTECTIONS_UTC_THR"},
+        {DF_CMD_PROTECTIONS_UTC_THR,      config.utc_threshold, "DF_CMD_PROTECTIONS_UTC_THR     "},
         {DF_CMD_PROTECTIONS_UTC_RECOVERY, config.utc_recovery,  "DF_CMD_PROTECTIONS_UTC_RECOVERY"},
         
         // Discharge temperature protections
-        {DF_CMD_PROTECTIONS_OTD_THR,      config.otd_threshold, "DF_CMD_PROTECTIONS_OTD_THR"},
+        {DF_CMD_PROTECTIONS_OTD_THR,      config.otd_threshold, "DF_CMD_PROTECTIONS_OTD_THR     "},
         {DF_CMD_PROTECTIONS_OTD_RECOVERY, config.otd_recovery,  "DF_CMD_PROTECTIONS_OTD_RECOVERY"},
-        {DF_CMD_PROTECTIONS_UTD_THR,      config.utd_threshold, "DF_CMD_PROTECTIONS_UTD_THR"},
+        {DF_CMD_PROTECTIONS_UTD_THR,      config.utd_threshold, "DF_CMD_PROTECTIONS_UTD_THR     "},
         {DF_CMD_PROTECTIONS_UTD_RECOVERY, config.utd_recovery,  "DF_CMD_PROTECTIONS_UTD_RECOVERY"}
     };
 
@@ -707,7 +691,6 @@ bool MeshSolar::bat_temp_protection_setting_update() {
         }
         
         uint8_t register_value = block.pvalue[0];
-        uint8_t original_value = register_value;
         
         if (this->cmd.basic.protection.enabled) {
             // Enable temperature protection: set specified bits
@@ -735,7 +718,13 @@ bool MeshSolar::bat_temp_protection_setting_update() {
         }
         
         uint8_t verified_value = verify_block.pvalue[0];
-        LOG_W("%s register: 0b%08b (0x%02X)", reg_name, verified_value, verified_value); // Log the register value
+        // Convert to binary string for logging (since %b is not standard)
+        char binary_str[9];
+        for (int i = 7; i >= 0; i--) {
+            binary_str[7-i] = (verified_value & (1 << i)) ? '1' : '0';
+        }
+        binary_str[8] = '\0';
+        LOG_W("%s register: 0b%s (0x%02X)", reg_name, binary_str, verified_value);
         
         // Check if bits are set correctly
         bool bits_match_expected = ((verified_value & bit_mask) != 0) == this->cmd.basic.protection.enabled;
@@ -770,6 +759,161 @@ bool MeshSolar::bat_temp_protection_setting_update() {
 
 
     return res;
+}
+
+bool MeshSolar::bat_advance_battery_config_update() {
+    bool res = true;
+    /*
+     * Advanced battery configuration for BQ4050
+     * 
+     * This function sets advanced charge algorithm voltages and protection thresholds
+     * based on the advance command configuration.
+     * 
+     * It configures:
+     * - CUV (Cell Under Voltage) protection threshold and recovery
+     * - Charge voltages for different temperature ranges (EOC - End Of Charge)
+     * - Charge over-voltage protection thresholds
+     */
+
+    // Configuration table: {command, value, description}
+    struct config_entry_t {
+        uint16_t cmd;
+        uint16_t value;
+        const char* name;
+    };
+
+    // Define configurations using advance command parameters
+    config_entry_t configurations[] = {
+        // CUV protection settings
+        {DF_CMD_PROTECTIONS_CUV_THR,                          (uint16_t)this->cmd.advance.battery.cuv,                                   "DF_CMD_PROTECTIONS_CUV_THR                         "},
+        {DF_CMD_PROTECTIONS_CUV_RECOVERY,                     (uint16_t)(this->cmd.advance.battery.cuv + 100),                           "DF_CMD_PROTECTIONS_CUV_RECOVERY                    "},
+        // Advanced charge algorithm - EOC voltages for all temperature ranges
+        {DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL,       (uint16_t)this->cmd.advance.battery.eoc,                                   "DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL      "},
+        {DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL,       (uint16_t)this->cmd.advance.battery.eoc,                                   "DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL      "},
+        {DF_CMD_ADVANCED_CHARGE_ALG_HIGH_TEMP_CHARG_VOL,      (uint16_t)this->cmd.advance.battery.eoc,                                   "DF_CMD_ADVANCED_CHARGE_ALG_HIGH_TEMP_CHARG_VOL     "},
+        {DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL,       (uint16_t)this->cmd.advance.battery.eoc,                                   "DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL      "},
+        // Charge over-voltage protection thresholds for all temperature ranges
+        {DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR,                 (uint16_t)this->cmd.advance.battery.eoc_protect,                           "DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR                "},
+        {DF_CMD_PROTECTIONS_COV_STD_TEMP_THR,                 (uint16_t)this->cmd.advance.battery.eoc_protect,                           "DF_CMD_PROTECTIONS_COV_STD_TEMP_THR                "},
+        {DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR,                (uint16_t)this->cmd.advance.battery.eoc_protect,                           "DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR               "},
+        {DF_CMD_PROTECTIONS_COV_REC_TEMP_THR,                 (uint16_t)this->cmd.advance.battery.eoc_protect,                           "DF_CMD_PROTECTIONS_COV_REC_TEMP_THR                "},
+        // Protection COV thresholds settings
+        {DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR,                 (uint16_t)this->cmd.advance.battery.eoc_protect,                           "DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR                "},
+        {DF_CMD_PROTECTIONS_COV_STD_TEMP_THR,                 (uint16_t)this->cmd.advance.battery.eoc_protect,                           "DF_CMD_PROTECTIONS_COV_STD_TEMP_THR                "},
+        {DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR,                (uint16_t)this->cmd.advance.battery.eoc_protect,                           "DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR               "},
+        {DF_CMD_PROTECTIONS_COV_REC_TEMP_THR,                 (uint16_t)this->cmd.advance.battery.eoc_protect,                           "DF_CMD_PROTECTIONS_COV_REC_TEMP_THR                "},
+        // Protection COV recovery settings
+        {DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY,            (uint16_t)(this->cmd.advance.battery.eoc_protect - 100),                   "DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY           "},
+        {DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY,            (uint16_t)(this->cmd.advance.battery.eoc_protect - 100),                   "DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY           "},
+        {DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY,           (uint16_t)(this->cmd.advance.battery.eoc_protect - 100),                   "DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY          "},
+        {DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY,            (uint16_t)(this->cmd.advance.battery.eoc_protect - 100),                   "DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY           "}
+    };
+
+    // Helper lambda function to write and verify voltage setting
+    auto write_and_verify = [&](uint16_t cmd, uint16_t value, const char* name) -> bool {
+        bq4050_block_t block = {cmd, 2, (uint8_t*)&value, NUMBER};
+        bq4050_block_t ret = {cmd, 2, nullptr, NUMBER};
+
+        // Write the value
+        if (!this->_bq4050->write_dataflash_block(block)) {
+            LOG_E("Failed to write %s", name);
+            return false;
+        }
+        delay(100);
+
+        // Read back and verify
+        if (!this->_bq4050->read_dataflash_block(&ret)) {
+            LOG_E("Failed to read back %s", name);
+            return false;
+        }
+
+        uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
+        if (value == read_value) {
+            LOG_W("%s set to: %d mV - OK", name, read_value);
+            return true;
+        } else {
+            LOG_E("%s set to: %d mV - ERROR (expected %d mV)", name, read_value, value);
+            return false;
+        }
+    };
+
+    // Apply all configurations
+    for(auto& cfg : configurations) {
+        res &= write_and_verify(cfg.cmd, cfg.value, cfg.name);
+    }
+
+    return res;
+}
+
+bool MeshSolar::bat_advance_cedv_setting_update(){
+    bool res = true; // Initialize result variable
+
+    /*
+     * CEDV (Constant Energy Discharge Voltage) configuration for BQ4050
+     * 
+     * This function sets CEDV parameters based on the advance command configuration.
+     * 
+     * It configures:
+     * - CEDV fixed EDV0/1/2 voltages
+     * - CEDV voltage thresholds
+     */
+
+    // Configuration table: {command, value, description}
+    struct config_entry_t {
+        uint16_t cmd;
+        uint16_t value;
+        const char* name;
+    };
+
+    // Define configurations using advance command parameters
+    config_entry_t configurations[] = {
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0,       (uint16_t)this->cmd.advance.cedv.cedv0,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0     "},
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1,       (uint16_t)this->cmd.advance.cedv.cedv1,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1     "},
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2,       (uint16_t)this->cmd.advance.cedv.cedv2,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2     "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0,   (uint16_t)this->cmd.advance.cedv.discharge_cedv0,   "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0 "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_10,  (uint16_t)this->cmd.advance.cedv.discharge_cedv10,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_10"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_20,  (uint16_t)this->cmd.advance.cedv.discharge_cedv20,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_20"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_30,  (uint16_t)this->cmd.advance.cedv.discharge_cedv30,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_30"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_40,  (uint16_t)this->cmd.advance.cedv.discharge_cedv40,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_40"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_50,  (uint16_t)this->cmd.advance.cedv.discharge_cedv50,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_50"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_60,  (uint16_t)this->cmd.advance.cedv.discharge_cedv60,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_60"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_70,  (uint16_t)this->cmd.advance.cedv.discharge_cedv70,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_70"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_80,  (uint16_t)this->cmd.advance.cedv.discharge_cedv80,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_80"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_90,  (uint16_t)this->cmd.advance.cedv.discharge_cedv90,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_90"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100, (uint16_t)this->cmd.advance.cedv.discharge_cedv100, "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100"},
+    };
+
+
+    // Helper lambda function to write and verify voltage setting
+    auto write_and_verify = [&](uint16_t cmd, uint16_t value, const char* name) -> bool {
+        // Create a block structure for writing and reading data flash  
+        bq4050_block_t block = {cmd, 2, (uint8_t*)&value, NUMBER};
+        bq4050_block_t ret = {cmd, 2, nullptr, NUMBER};
+        // Write the value to data flash
+        if (!this->_bq4050->write_dataflash_block(block)) {
+            LOG_E("Failed to write %s", name);
+            return false;
+        }
+        delay(100); // Ensure the write is complete before reading
+        // Read back the value from data flash
+        if (!this->_bq4050->read_dataflash_block(&ret)) {
+            LOG_E("Failed to read back %s", name);
+            return false;
+        }
+        uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8); // Combine two bytes into a single value
+        if (value == read_value) {
+            LOG_W("%s set to: %d mV - OK", name, read_value); // Log success
+            return true;
+        } else {
+            LOG_E("%s set to: %d mV - ERROR (expected %d mV)", name, read_value, value); // Log error
+            return false;
+        }
+    };
+    // Apply all configurations
+    for(auto& cfg : configurations) {
+        res &= write_and_verify(cfg.cmd, cfg.value, cfg.name);
+    }
+    return res; // Return the result of all configurations
 }
 
 bool MeshSolar::bat_fet_toggle(){

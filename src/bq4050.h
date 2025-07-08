@@ -2,8 +2,6 @@
 #define BQ4050_H
 #include "SoftwareWire.h"
 
-// #define dbgSerial           Serial2
-
 #define BQ4050ADDR          0x0B
 
 #define BLOCK_ACCESS_CMD            (0x44)
@@ -59,6 +57,21 @@
 #define DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1  0x45a0
 #define DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2  0x45a3
 
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0    0x45a6 // CEDV Profile 1 Voltage 0
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_10   0x45a8 // CEDV Profile 1 Voltage 10
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_20   0x45aa // CEDV Profile 1 Voltage 20
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_30   0x45ac // CEDV Profile 1 Voltage 30
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_40   0x45ae // CEDV Profile 1 Voltage 40
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_50   0x45b0 // CEDV Profile 1 Voltage 50
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_60   0x45b2 // CEDV Profile 1 Voltage 60
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_70   0x45b4 // CEDV Profile 1 Voltage 70
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_80   0x45b6 // CEDV Profile 1 Voltage 80
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_90   0x45b8 // CEDV Profile 1 Voltage 90
+#define DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100  0x45ba // CEDV Profile 1 Voltage 100
+
+
+
+
 #define DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH  0x444d        // Design Capacity in mAh
 #define DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH  0x444f        // Design Capacity in CWh
 #define DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV    0x4451        // Design Capacity in CWh per cell
@@ -67,15 +80,21 @@
 #define DF_CMD_PROTECTIONS_CUV_THR            0x4481
 #define DF_CMD_PROTECTIONS_CUV_RECOVERY       0x4484
 
+
+
+#define DF_CMD_PROTECTIONS_COV_THR            0x4481
+#define DF_CMD_PROTECTIONS_COV_RECOVERY       0x4484
+
+
 #define DF_CMD_PROTECTIONS_COV_LOW_TEMP_THR   0x4486
 #define DF_CMD_PROTECTIONS_COV_STD_TEMP_THR   0x4488
 #define DF_CMD_PROTECTIONS_COV_HIGH_TEMP_THR  0x448a
 #define DF_CMD_PROTECTIONS_COV_REC_TEMP_THR   0x448c
 
-#define DF_CMD_PROTECTIONS_CUV_RECOVERY_LOW_TEMP_THR   0x448f
-#define DF_CMD_PROTECTIONS_CUV_RECOVERY_STD_TEMP_THR   0x4491
-#define DF_CMD_PROTECTIONS_CUV_RECOVERY_HIGH_TEMP_THR  0x4493
-#define DF_CMD_PROTECTIONS_CUV_RECOVERY_REC_TEMP_THR   0x4495
+#define DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY  0x448f // recovery low temperature threshold
+#define DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY  0x4491 // recovery standard temperature threshold
+#define DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY 0x4493 // recovery high temperature threshold
+#define DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY  0x4495 // recovery temperature threshold
 
 #define DF_CMD_PROTECTIONS_OTD_THR                     0x44ba //discharge over temperature threshold
 #define DF_CMD_PROTECTIONS_OTD_RECOVERY                0x44bd //discharge over temperature recovery
