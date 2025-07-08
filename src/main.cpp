@@ -74,7 +74,7 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
             LOG_E("Missing fields in 'battery' or 'temperature_protection'");
             return false;
         }
-        strlcpy(cmd->basic.bat_type, battery["type"] | "", sizeof(cmd->basic.bat_type));
+        strlcpy(cmd->basic.type, battery["type"] | "", sizeof(cmd->basic.type));
         cmd->basic.cell_number = battery["cell_number"] | 0;
         cmd->basic.design_capacity = battery["design_capacity"] | 0;
         cmd->basic.discharge_cutoff_voltage = battery["cutoff_voltage"] | 0;
@@ -173,20 +173,23 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
 }
 
 
-size_t meshsolarBasicConfigToJson(const basic_config_t *config, String& output) {
+size_t meshsolarBasicConfigToJson(const basic_config_t *basic, String& output) {
     StaticJsonDocument<512> doc;
+
+    LOG_W("bat type: %s", basic->type);
+
     doc["command"] = "config";
-    doc["battery"]["bat_type"] = config->bat_type;
-    doc["battery"]["cell_number"] = config->cell_number;
-    doc["battery"]["design_capacity"] = config->design_capacity;
-    doc["battery"]["cutoff_voltage"] = config->discharge_cutoff_voltage;
+    doc["battery"]["type"] = String(basic->type);
+    doc["battery"]["cell_number"] = basic->cell_number;
+    doc["battery"]["design_capacity"] = basic->design_capacity;
+    doc["battery"]["cutoff_voltage"] = basic->discharge_cutoff_voltage;
 
     JsonObject protection = doc.createNestedObject("temperature_protection");
-    protection["discharge_high_temp_c"] = config->protection.discharge_high_temp_c;
-    protection["discharge_low_temp_c"] = config->protection.discharge_low_temp_c;
-    protection["charge_high_temp_c"] = config->protection.charge_high_temp_c;
-    protection["charge_low_temp_c"] = config->protection.charge_low_temp_c;
-    protection["temp_enabled"] = config->protection.enabled;
+    protection["discharge_high_temp_c"] = basic->protection.discharge_high_temp_c;
+    protection["discharge_low_temp_c"]  = basic->protection.discharge_low_temp_c;
+    protection["charge_high_temp_c"]    = basic->protection.charge_high_temp_c;
+    protection["charge_low_temp_c"]     = basic->protection.charge_low_temp_c;
+    protection["temp_enabled"]          = basic->protection.enabled;
 
     output = "";
     return serializeJson(doc, output);
@@ -290,12 +293,18 @@ void loop() {
                 LOG_I("Resetting BQ4050...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
-                // String json = "";
-                // size_t len = meshsolarBasicConfigToJson(&meshsolar.cmd.basic, json);
-                // if(len > 0) {
-                //     comSerial.println(json); // Send the configuration back to the serial port
-                //     dbgSerial.println(json); // Send the configuration back to the serial port
-                // }
+                static bool first_sync = true;
+                String json = "";
+                if(first_sync) {
+                    meshsolar.get_bat_realtime_config(); // Update the battery configuration
+                    first_sync = false; // Set to false after the first sync
+                }
+                
+                size_t len = meshsolarBasicConfigToJson(&meshsolar.sync_rsp.basic, json);
+                if(len > 0) {
+                    comSerial.println(json); // Send the configuration back to the serial port
+                    LOG_W("Sync : %s", json.c_str());
+                }
 
                 // len = meshsolarAdvanceConfigToJson(&meshsolar.cmd.advance, json);
                 // if(len > 0) {
@@ -345,32 +354,10 @@ void loop() {
     }
 #endif
 
-#if 0
+#if 1
     if(0 == cnt % 1000) {
         meshsolar.get_bat_realtime_status(); // Update the battery status
         meshsolar.get_bat_realtime_config(); // Update the battery configuration
-
-gSerial.println(" mV");
-
-        // for (uint8_t i = 0; i < meshsolar.sta.cell_count; i++) {
-        //     dbgSerial.print("Cell ");
-        //     dbgSerial.print(meshsolar.sta.cells[i].cell_num);
-        //     dbgSerial.print(" Voltage: ");
-        //     dbgSerial.print(meshsolar.sta.cells[i].voltage, 0);
-        //     dbgSerial.println(" mV");
-        // }
-
-        // dbgSerial.print("Learned Capacity: ");
-        // dbgSerial.print(meshsolar.sta.learned_capacity, 0);
-        // dbgSerial.println(" mAh");
-
-        // dbgSerial.print("Charge Current: ");
-        // dbgSerial.print(meshsolar.sta.charge_current);
-        // dbgSerial.println(" mA");
-
-        // dbgSerial.print("State of Charge: ");
-        // dbgSerial.print(meshsolar.sta.soc_gauge);
-        // dbgSerial.println("%");
     }
 #endif
 

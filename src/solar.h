@@ -6,16 +6,16 @@
 
 // Temperature protection structure
 typedef struct {
-    int     discharge_high_temp_c;       // Discharge high temperature threshold (°C)
-    int     charge_high_temp_c;          // Charge high temperature threshold (°C)
-    int     discharge_low_temp_c;        // Discharge low temperature threshold (°C)
-    int     charge_low_temp_c;           // Charge low temperature threshold (°C)
+    float   discharge_high_temp_c;       // Discharge high temperature threshold (°C)
+    float   charge_high_temp_c;          // Charge high temperature threshold (°C)
+    float   discharge_low_temp_c;        // Discharge low temperature threshold (°C)
+    float   charge_low_temp_c;           // Charge low temperature threshold (°C)
     bool    enabled;                     // Whether temperature protection is enabled     
 } temp_protection_t;
 
 // Battery configuration structure
 typedef struct {
-    char              bat_type[16];      // Battery type string
+    char              type[16];          // Battery type string
     int               cell_number;       // Number of battery cells
     int               design_capacity;   // Battery design capacity
     int               discharge_cutoff_voltage;    // Battery discharge cutoff voltage

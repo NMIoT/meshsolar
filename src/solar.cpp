@@ -9,7 +9,7 @@ MeshSolar::MeshSolar(){
     this->cmd.basic.cell_number = 4; // Default to 4 cells
     this->cmd.basic.design_capacity = 3200; // Default design capacity in m
     this->cmd.basic.discharge_cutoff_voltage = 2800; // Default cutoff voltage in mV
-    strlcpy(this->cmd.basic.bat_type, "lifepo4", sizeof(this->cmd.basic.bat_type)); // Default battery type
+    strlcpy(this->cmd.basic.type, "lifepo4", sizeof(this->cmd.basic.type)); // Default battery type
     this->cmd.basic.protection.charge_high_temp_c         = 60; // Default high temperature threshold
     this->cmd.basic.protection.charge_low_temp_c          = -10; // Default low temperature threshold
     this->cmd.basic.protection.discharge_high_temp_c      = 60; // Default discharge
@@ -98,17 +98,19 @@ bool MeshSolar::get_bat_realtime_config(){
         .type = STRING
     };
     /*****************************************   bat type   *************************************/
+    memset(this->sync_rsp.basic.type, 0, sizeof(this->sync_rsp.basic.type)); // Clear the battery type string
     this->_bq4050->read_dataflash_block(&block); 
     if(0 == strcasecmp((const char *)block.pvalue, "lfe4")) {
-        strlcpy(this->cmd.basic.bat_type, "lifepo4", sizeof(this->cmd.basic.bat_type));
+        strlcpy(this->sync_rsp.basic.type, "lifepo4", sizeof(this->sync_rsp.basic.type)); // Copy battery type to sync response structure
     }
     else if(0 == strcasecmp((const char *)block.pvalue, "lion")) {
-        strlcpy(this->cmd.basic.bat_type, "liion", sizeof(this->cmd.basic.bat_type));
+        strlcpy(this->sync_rsp.basic.type, "liion", sizeof(this->sync_rsp.basic.type)); // Copy battery type to sync response structure
     }
     else if(0 == strcasecmp((const char *)block.pvalue, "lipo")) {
-        strlcpy(this->cmd.basic.bat_type, "lipo", sizeof(this->cmd.basic.bat_type));
+        strlcpy(this->sync_rsp.basic.type, "lipo", sizeof(this->sync_rsp.basic.type)); // Copy battery type to sync response structure
     }
     else {
+        LOG_E("Unknown battery type from BQ4050: %s", (const char *)block.pvalue);
         return false; // Unknown battery type, return false
     }
     /*****************************************  cell count  *************************************/
@@ -117,22 +119,80 @@ bool MeshSolar::get_bat_realtime_config(){
     block.type = NUMBER; // Set block type to NUMBER
     this->_bq4050->read_dataflash_block(&block); // Read current DA configuration again
     block.pvalue[0] = (block.pvalue[0] & 0b00000011);        // Mask to get only the last 2 bits for DA configuration
-    block.pvalue[0] = (block.pvalue[0] > 3) ? 3 : block.pvalue[0];        // Ensure DA value is within valid range (0-3)
-    this->sync_rsp.basic.cell_number = block.pvalue[0] + 1; // Set cell count based on DA configuration (0-3 corresponds to 1-4 cells)
+    block.pvalue[0] = (block.pvalue[0] > 3) ? 3 : block.pvalue[0];  // Ensure DA value is within valid range (0-3)
+    this->sync_rsp.basic.cell_number = block.pvalue[0] + 1;   // Set cell count based on DA configuration (0-3 corresponds to 1-4 cells)
     /*****************************************  design capacity  *************************************/
     block.cmd = DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH; // Command to access design capacity
     block.len = 2; // Length of the data block to read
     block.type = NUMBER; // Set block type to NUMBER
     this->_bq4050->read_dataflash_block(&block); // Read design capacity
-    this->sync_rsp.basic.design_capacity = (block.pvalue[0] << 8) | block.pvalue[1]; // Combine bytes to get capacity in mAh
+    this->sync_rsp.basic.design_capacity = (block.pvalue[1] << 8) | block.pvalue[0]; // Combine bytes to get capacity in mAh
     /*****************************************  cutoff voltage  *************************************/
     block.cmd = DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR; // Command to access cutoff voltage
     block.len = 2; // Length of the data block to read
     block.type = NUMBER; // Set block type to NUMBER
     this->_bq4050->read_dataflash_block(&block); // Read cutoff voltage
-    this->sync_rsp.basic.discharge_cutoff_voltage = (block.pvalue[0] << 8) | block.pvalue[1]; // Combine bytes to get voltage in mV
-    /*****************************************  temperature protection  *************************************/
-
+    this->sync_rsp.basic.discharge_cutoff_voltage = (block.pvalue[1] << 8) | block.pvalue[0]; // Combine bytes to get voltage in mV
+    /*****************************************  temperature protection charge high temp  *************************************/
+    block.cmd = DF_CMD_PROTECTIONS_OTC_THR; // Command to access temperature protection thresholds
+    block.len = 2;
+    block.type = NUMBER; // Set block type to NUMBER
+    this->_bq4050->read_dataflash_block(&block); // Read temperature protection thresholds
+    int16_t raw_temp = (int16_t)((block.pvalue[1] << 8) | block.pvalue[0]); // Read as signed 16-bit value
+    this->sync_rsp.basic.protection.charge_high_temp_c = raw_temp / 10.0f; // Convert from 0.1°C to Celsius
+    /*****************************************  temperature protection charge low temp  *************************************/
+    block.cmd = DF_CMD_PROTECTIONS_UTC_THR; // Command to access charge low temperature threshold
+    block.len = 2; // Length of the data block to read
+    block.type = NUMBER; // Set block type to NUMBER
+    this->_bq4050->read_dataflash_block(&block); // Read charge low temperature threshold
+    raw_temp = (int16_t)((block.pvalue[1] << 8) | block.pvalue[0]); // Read as signed 16-bit value
+    this->sync_rsp.basic.protection.charge_low_temp_c = raw_temp / 10.0f; // Convert from 0.1°C to Celsius
+    /*****************************************  temperature protection discharge high temp  *************************************/
+    block.cmd = DF_CMD_PROTECTIONS_OTD_THR; // Command to access discharge high temperature threshold
+    block.len = 2; // Length of the data block to read
+    block.type = NUMBER; // Set block type to NUMBER
+    this->_bq4050->read_dataflash_block(&block); // Read discharge high temperature threshold
+    raw_temp = (int16_t)((block.pvalue[1] << 8) | block.pvalue[0]); // Read as signed 16-bit value
+    this->sync_rsp.basic.protection.discharge_high_temp_c = raw_temp / 10.0f; // Convert from 0.1°C to Celsius
+    /*****************************************  temperature protection discharge low temp  *************************************/
+    block.cmd = DF_CMD_PROTECTIONS_UTD_THR; // Command to access discharge low temperature threshold
+    block.len = 2; // Length of the data block to read
+    block.type = NUMBER; // Set block type to NUMBER
+    this->_bq4050->read_dataflash_block(&block); // Read discharge low temperature threshold
+    raw_temp = (int16_t)((block.pvalue[1] << 8) | block.pvalue[0]); // Read as signed 16-bit value
+    this->sync_rsp.basic.protection.discharge_low_temp_c = raw_temp / 10.0f; // Convert from 0.1°C to Celsius
+    /*****************************************  temperature protection enabled  *************************************/
+    // Read temperature protection enable status from both Protection Enable registers
+    // Temperature protection is considered enabled only if all required bits are set in both registers
+    
+    bool protection_b_enabled = false, protection_d_enabled = false;
+    
+    // Read Protection Enable B register (controls OTC: bit 5, OTD: bit 4)
+    block.cmd = DF_CMD_SETTINGS_PROTECTIONS_ENABLE_B;
+    block.len = 1;
+    block.type = NUMBER;
+    if (this->_bq4050->read_dataflash_block(&block)) {
+        const uint8_t PROTECTION_B_TEMP_MASK = 0b00110000; // Bits 4 and 5 (OTD and OTC)
+        protection_b_enabled = ((block.pvalue[0] & PROTECTION_B_TEMP_MASK) == PROTECTION_B_TEMP_MASK);
+        LOG_D("Protection Enable B: 0x%02X, temp bits enabled: %s", block.pvalue[0], protection_b_enabled ? "Yes" : "No");
+    } else {
+        LOG_E("Failed to read Protection Enable B register");
+    }
+    
+    // Read Protection Enable D register (controls UTC: bit 3, UTD: bit 2)
+    block.cmd = DF_CMD_SETTINGS_PROTECTIONS_ENABLE_D;
+    block.len = 1;
+    block.type = NUMBER;
+    if (this->_bq4050->read_dataflash_block(&block)) {
+        const uint8_t PROTECTION_D_TEMP_MASK = 0b00001100; // Bits 2 and 3 (UTD and UTC)
+        protection_d_enabled = ((block.pvalue[0] & PROTECTION_D_TEMP_MASK) == PROTECTION_D_TEMP_MASK);
+        LOG_D("Protection Enable D: 0x%02X, temp bits enabled: %s", block.pvalue[0], protection_d_enabled ? "Yes" : "No");
+    } else {
+        LOG_E("Failed to read Protection Enable D register");
+    }
+    // Temperature protection is enabled only if both registers have the required bits set
+    this->sync_rsp.basic.protection.enabled = protection_b_enabled && protection_d_enabled;
+    LOG_D("Temperature protection overall status: %s", this->sync_rsp.basic.protection.enabled ? "ENABLED" : "DISABLED");
 
     return true; // Return false to indicate configuration update was successful
 }
@@ -185,9 +245,9 @@ bool MeshSolar::bat_basic_type_setting_update(){
         const char* name;
     };
 
-    const char *bat_type = nullptr;
+    const char *type = nullptr;
     // Set voltage parameters based on battery type with temperature compensation
-    if(0 == strcasecmp(this->cmd.basic.bat_type, "lifepo4")) {
+    if(0 == strcasecmp(this->cmd.basic.type, "lifepo4")) {
         // LiFePO4 (Lithium Iron Phosphate) characteristics:
         // - More stable across temperatures than Li-ion
         // - Lower nominal voltage (3.2V vs 3.7V for Li-ion)
@@ -198,9 +258,9 @@ bool MeshSolar::bat_basic_type_setting_update(){
             .cov_threshold  = {3750, 3750, 3750, 3750},  // Safety margins, esp. at extremes
             .cov_recovery   = {3600, 3600, 3600, 3600}   // Match charge voltages for stability
         };
-        bat_type = "lfe4"; // Set battery type to LiFePO4 , bq4050 uses 4 character to store chemistry name
+        type = "lfe4"; // Set battery type to LiFePO4 , bq4050 uses 4 character to store chemistry name
     }
-    else if((0 == strcasecmp(this->cmd.basic.bat_type, "lipo"))) {
+    else if((0 == strcasecmp(this->cmd.basic.type, "lipo"))) {
         // Li-ion/LiPo (Lithium Cobalt/Polymer) characteristics:
         // - Higher energy density but more temperature-sensitive
         // - Higher nominal voltage (3.7V) and charge voltage (4.2V)
@@ -211,9 +271,9 @@ bool MeshSolar::bat_basic_type_setting_update(){
             .cov_threshold  = {4300, 4300, 4300, 4300},  // Conservative safety margins
             .cov_recovery   = {4100, 4100, 4100, 4100}   // Lower recovery for safety
         };
-        bat_type = "lipo"; // Set battery type to LiPo , bq4050 uses 4 character to store chemistry name
+        type = "lipo"; // Set battery type to LiPo , bq4050 uses 4 character to store chemistry name
     }
-    else if((0 == strcasecmp(this->cmd.basic.bat_type, "liion"))) {
+    else if((0 == strcasecmp(this->cmd.basic.type, "liion"))) {
         // Li-ion/LiPo (Lithium Cobalt/Polymer) characteristics:
         // - Higher energy density but more temperature-sensitive
         // - Higher nominal voltage (3.7V) and charge voltage (4.2V)
@@ -224,7 +284,7 @@ bool MeshSolar::bat_basic_type_setting_update(){
             .cov_threshold  = {4300, 4300, 4300, 4300},  // Conservative safety margins
             .cov_recovery   = {4100, 4100, 4100, 4100}   // Lower recovery for safety
         };
-        bat_type = "lion"; // Set battery type to Li-ion , bq4050 uses 4 character to store chemistry name
+        type = "lion"; // Set battery type to Li-ion , bq4050 uses 4 character to store chemistry name
     }
     else {
         // dbgSerial.println("Unknown battery type, exit!!!!!!!");
@@ -302,8 +362,8 @@ bool MeshSolar::bat_basic_type_setting_update(){
         return false; // Return false if memory allocation fails
     }
     memset(block.pvalue, 0, block.len); // Initialize the value to zero
-    block.pvalue[0] = strlen(bat_type); // Set the first byte to the length of the battery type string
-    strlcpy((char *)block.pvalue + 1, bat_type, block.len); // Copy the battery type string into the block value
+    block.pvalue[0] = strlen(type); // Set the first byte to the length of the battery type string
+    strlcpy((char *)block.pvalue + 1, type, block.len); // Copy the battery type string into the block value
     this->_bq4050->write_dataflash_block(block); // Write the battery type
     free(block.pvalue); // Free the allocated memory for block.pvalue
     block.pvalue = nullptr; // Set pointer to null after freeing memory
@@ -315,7 +375,7 @@ bool MeshSolar::bat_basic_type_setting_update(){
     ret.len = block.len; // Length of the data block to read
     ret.type = block.type; // Set block type to STRING
     this->_bq4050->read_dataflash_block(&ret); // Read the battery type back from data flash
-    if(0 == strcasecmp((const char *)(ret.pvalue), bat_type)) {
+    if(0 == strcasecmp((const char *)(ret.pvalue), type)) {
         LOG_W("DF_CMD_SBS_DATA_CHEMISTRY after: %s - OK", (const char *)(ret.pvalue)); // Log success
     }
     else {
@@ -336,10 +396,10 @@ bool MeshSolar::bat_basic_cells_setting_update() {
 
     // Get cell voltage based on battery type
     uint16_t cell_voltage_mv = 0;
-    if(0 == strcasecmp(this->cmd.basic.bat_type, "lifepo4")) {
+    if(0 == strcasecmp(this->cmd.basic.type, "lifepo4")) {
         cell_voltage_mv = 3600;
     }
-    else if((0 == strcasecmp(this->cmd.basic.bat_type, "liion")) || (0 == strcasecmp(this->cmd.basic.bat_type, "lipo"))){
+    else if((0 == strcasecmp(this->cmd.basic.type, "liion")) || (0 == strcasecmp(this->cmd.basic.type, "lipo"))){
         cell_voltage_mv = 4200;
     }
     else {
@@ -415,10 +475,10 @@ bool MeshSolar::bat_basic_design_capacity_setting_update(){
     float cell_voltage = 0.0f;
     bool res = true;
 
-    if(0 == strcasecmp(this->cmd.basic.bat_type, "lifepo4")) {
+    if(0 == strcasecmp(this->cmd.basic.type, "lifepo4")) {
         cell_voltage = 3.6f;
     }
-    else if((0 == strcasecmp(this->cmd.basic.bat_type, "liion")) || (0 == strcasecmp(this->cmd.basic.bat_type, "lipo"))){
+    else if((0 == strcasecmp(this->cmd.basic.type, "liion")) || (0 == strcasecmp(this->cmd.basic.type, "lipo"))){
         cell_voltage = 4.2f;
     }
     else {
@@ -590,16 +650,16 @@ bool MeshSolar::bat_basic_temp_protection_setting_update() {
     };
 
     // Get temperature values from configuration and validate
-    int16_t charge_high    = this->cmd.basic.protection.charge_high_temp_c;
-    int16_t charge_low     = this->cmd.basic.protection.charge_low_temp_c;
-    int16_t discharge_high = this->cmd.basic.protection.discharge_high_temp_c;
-    int16_t discharge_low  = this->cmd.basic.protection.discharge_low_temp_c;
+    float charge_high    = this->cmd.basic.protection.charge_high_temp_c;
+    float charge_low     = this->cmd.basic.protection.charge_low_temp_c;
+    float discharge_high = this->cmd.basic.protection.discharge_high_temp_c;
+    float discharge_low  = this->cmd.basic.protection.discharge_low_temp_c;
 
     // Validate temperature ranges (basic sanity check)
     if (charge_low >= charge_high || discharge_low >= discharge_high) {
         LOG_E("ERROR: Invalid temperature ranges in configuration");
-        LOG_E("  Charge: %d°C to %d°C", charge_low, charge_high);
-        LOG_E("  Discharge: %d°C to %d°C", discharge_low, discharge_high);
+        LOG_E("  Charge: %.1f°C to %.1f°C", charge_low, charge_high);
+        LOG_E("  Discharge: %.1f°C to %.1f°C", discharge_low, discharge_high);
         return false;
     }
 
