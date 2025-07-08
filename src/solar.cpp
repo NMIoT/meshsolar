@@ -91,52 +91,51 @@ bool MeshSolar::get_bat_realtime_status(){
 }
 
 bool MeshSolar::get_bat_realtime_config(){
-        bq4050_block_t block= {
-            .cmd = DF_CMD_SBS_DATA_CHEMISTRY,
-            .len = 5,
-            .pvalue =nullptr,
-            .type = STRING
-        };
-        /*****************************************   bat type   *************************************/
-        this->_bq4050->read_dataflash_block(&block); 
-        if(0 == strcasecmp((const char *)block.pvalue, "lfe4")) {
-            strlcpy(this->cmd.basic.bat_type, "lifepo4", sizeof(this->cmd.basic.bat_type));
-        }
-        else if(0 == strcasecmp((const char *)block.pvalue, "lion")) {
-            strlcpy(this->cmd.basic.bat_type, "liion", sizeof(this->cmd.basic.bat_type));
-        }
-        else if(0 == strcasecmp((const char *)block.pvalue, "lipo")) {
-            strlcpy(this->cmd.basic.bat_type, "lipo", sizeof(this->cmd.basic.bat_type));
-        }
-        else {
-            return false; // Unknown battery type, return false
-        }
-        /*****************************************  cell count  *************************************/
-        block.cmd = DF_CMD_DA_CONFIGURATION; // Command to access DA configuration
-        block.len = 1; // Length of the data block to read
-        block.type = NUMBER; // Set block type to NUMBER
-        this->_bq4050->read_dataflash_block(&block); // Read current DA configuration again
-        block.pvalue[0] = (block.pvalue[0] & 0b00000011);        // Mask to get only the last 2 bits for DA configuration
-        block.pvalue[0] = (block.pvalue[0] > 3) ? 3 : block.pvalue[0];        // Ensure DA value is within valid range (0-3)
-        this->sync_rsp.basic.cell_number = block.pvalue[0] + 1; // Set cell count based on DA configuration (0-3 corresponds to 1-4 cells)
-        /*****************************************  design capacity  *************************************/
-        block.cmd = DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH; // Command to access design capacity
-        block.len = 2; // Length of the data block to read
-        block.type = NUMBER; // Set block type to NUMBER
-        this->_bq4050->read_dataflash_block(&block); // Read design capacity
-        this->sync_rsp.basic.design_capacity = (block.pvalue[0] << 8) | block.pvalue[1]; // Combine bytes to get capacity in mAh
-        /*****************************************  cutoff voltage  *************************************/
-        block.cmd = DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR; // Command to access cutoff voltage
-        block.len = 2; // Length of the data block to read
-        block.type = NUMBER; // Set block type to NUMBER
-        this->_bq4050->read_dataflash_block(&block); // Read cutoff voltage
-        this->sync_rsp.basic.discharge_cutoff_voltage = (block.pvalue[0] << 8) | block.pvalue[1]; // Combine bytes to get voltage in mV
-        /*****************************************  temperature protection  *************************************/
+    bq4050_block_t block= {
+        .cmd = DF_CMD_SBS_DATA_CHEMISTRY,
+        .len = 5,
+        .pvalue =nullptr,
+        .type = STRING
+    };
+    /*****************************************   bat type   *************************************/
+    this->_bq4050->read_dataflash_block(&block); 
+    if(0 == strcasecmp((const char *)block.pvalue, "lfe4")) {
+        strlcpy(this->cmd.basic.bat_type, "lifepo4", sizeof(this->cmd.basic.bat_type));
+    }
+    else if(0 == strcasecmp((const char *)block.pvalue, "lion")) {
+        strlcpy(this->cmd.basic.bat_type, "liion", sizeof(this->cmd.basic.bat_type));
+    }
+    else if(0 == strcasecmp((const char *)block.pvalue, "lipo")) {
+        strlcpy(this->cmd.basic.bat_type, "lipo", sizeof(this->cmd.basic.bat_type));
+    }
+    else {
+        return false; // Unknown battery type, return false
+    }
+    /*****************************************  cell count  *************************************/
+    block.cmd = DF_CMD_DA_CONFIGURATION; // Command to access DA configuration
+    block.len = 1; // Length of the data block to read
+    block.type = NUMBER; // Set block type to NUMBER
+    this->_bq4050->read_dataflash_block(&block); // Read current DA configuration again
+    block.pvalue[0] = (block.pvalue[0] & 0b00000011);        // Mask to get only the last 2 bits for DA configuration
+    block.pvalue[0] = (block.pvalue[0] > 3) ? 3 : block.pvalue[0];        // Ensure DA value is within valid range (0-3)
+    this->sync_rsp.basic.cell_number = block.pvalue[0] + 1; // Set cell count based on DA configuration (0-3 corresponds to 1-4 cells)
+    /*****************************************  design capacity  *************************************/
+    block.cmd = DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH; // Command to access design capacity
+    block.len = 2; // Length of the data block to read
+    block.type = NUMBER; // Set block type to NUMBER
+    this->_bq4050->read_dataflash_block(&block); // Read design capacity
+    this->sync_rsp.basic.design_capacity = (block.pvalue[0] << 8) | block.pvalue[1]; // Combine bytes to get capacity in mAh
+    /*****************************************  cutoff voltage  *************************************/
+    block.cmd = DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR; // Command to access cutoff voltage
+    block.len = 2; // Length of the data block to read
+    block.type = NUMBER; // Set block type to NUMBER
+    this->_bq4050->read_dataflash_block(&block); // Read cutoff voltage
+    this->sync_rsp.basic.discharge_cutoff_voltage = (block.pvalue[0] << 8) | block.pvalue[1]; // Combine bytes to get voltage in mV
+    /*****************************************  temperature protection  *************************************/
 
 
-        return true; // Return false to indicate configuration update was successful
+    return true; // Return false to indicate configuration update was successful
 }
-
 
 bool MeshSolar::bat_type_setting_update(){ 
     bool res = true;
@@ -480,14 +479,6 @@ bool MeshSolar::bat_design_capacity_setting_update(){
     return res;
 }
 
-bool MeshSolar::bat_charge_cutoff_voltage_setting_update(){
- 
-
-
-
-    return false; // Return false as this function is not implemented yet
-}
-
 bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
     bool res = true;
     
@@ -580,42 +571,242 @@ bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
     return res;
 }
 
+bool MeshSolar::bat_temp_protection_setting_update() {
+    bool res = true;
+    
+    /*
+     * Temperature protection configuration for battery safety
+     * 
+     * Temperature thresholds explained:
+     * - OTC (Over Temperature Charge): High temperature protection during charging
+     * - OTD (Over Temperature Discharge): High temperature protection during discharge  
+     * - UTC (Under Temperature Charge): Low temperature protection during charging
+     * - UTD (Under Temperature Discharge): Low temperature protection during discharge
+     * - Recovery: Temperature to resume normal operation after protection
+     * 
+     * Each protection has threshold and recovery values to prevent oscillation
+     */
 
-bool MeshSolar::bat_voltage_thresholds_setting_update(){
+    // Define temperature protection structure
+    struct temp_protection_t {
+        int16_t otc_threshold;    // Over Temperature Charge threshold (0.1°C units)
+        int16_t otc_recovery;     // Over Temperature Charge recovery (0.1°C units)
+        int16_t utc_threshold;    // Under Temperature Charge threshold (0.1°C units)
+        int16_t utc_recovery;     // Under Temperature Charge recovery (0.1°C units)
+        int16_t otd_threshold;    // Over Temperature Discharge threshold (0.1°C units)
+        int16_t otd_recovery;     // Over Temperature Discharge recovery (0.1°C units)
+        int16_t utd_threshold;    // Under Temperature Discharge threshold (0.1°C units)
+        int16_t utd_recovery;     // Under Temperature Discharge recovery (0.1°C units)
+    } config;
+
+    // Configuration table: {command, value, description}
+    struct config_entry_t {
+        uint16_t cmd;
+        int16_t value;
+        const char* name;
+    };
+
+    // Get temperature values from configuration and validate
+    int16_t charge_high    = this->cmd.basic.protection.charge_high_temp_c;
+    int16_t charge_low     = this->cmd.basic.protection.charge_low_temp_c;
+    int16_t discharge_high = this->cmd.basic.protection.discharge_high_temp_c;
+    int16_t discharge_low  = this->cmd.basic.protection.discharge_low_temp_c;
+
+    // Validate temperature ranges (basic sanity check)
+    if (charge_low >= charge_high || discharge_low >= discharge_high) {
+        dbgSerial.println("ERROR: Invalid temperature ranges in configuration");
+        dbgSerial.print("  Charge: ");
+        dbgSerial.print(charge_low);
+        dbgSerial.print("°C to ");
+        dbgSerial.print(charge_high);
+        dbgSerial.println("°C");
+        dbgSerial.print("  Discharge: ");
+        dbgSerial.print(discharge_low);
+        dbgSerial.print("°C to ");
+        dbgSerial.print(discharge_high);
+        dbgSerial.println("°C");
+        return false;
+    }
+
+    // Set temperature protection parameters with hysteresis
+    // Convert to BQ4050 format (0.1°C units) and apply 5°C hysteresis
+    config = {
+        .otc_threshold = (int16_t)(charge_high * 10),           // Charge over temperature threshold
+        .otc_recovery  = (int16_t)((charge_high - 5) * 10),     // 5°C lower for recovery
+        .utc_threshold = (int16_t)(charge_low * 10),            // Charge under temperature threshold
+        .utc_recovery  = (int16_t)((charge_low + 5) * 10),      // 5°C higher for recovery
+        .otd_threshold = (int16_t)(discharge_high * 10),        // Discharge over temperature threshold
+        .otd_recovery  = (int16_t)((discharge_high - 5) * 10),  // 5°C lower for recovery
+        .utd_threshold = (int16_t)(discharge_low * 10),         // Discharge under temperature threshold
+        .utd_recovery  = (int16_t)((discharge_low + 5) * 10)    // 5°C higher for recovery
+    };
+
+    config_entry_t configurations[] = {
+        // Charge temperature protections
+        {DF_CMD_PROTECTIONS_OTC_THR,      config.otc_threshold, "DF_CMD_PROTECTIONS_OTC_THR"},
+        {DF_CMD_PROTECTIONS_OTC_RECOVERY, config.otc_recovery,  "DF_CMD_PROTECTIONS_OTC_RECOVERY"},
+        {DF_CMD_PROTECTIONS_UTC_THR,      config.utc_threshold, "DF_CMD_PROTECTIONS_UTC_THR"},
+        {DF_CMD_PROTECTIONS_UTC_RECOVERY, config.utc_recovery,  "DF_CMD_PROTECTIONS_UTC_RECOVERY"},
+        
+        // Discharge temperature protections
+        {DF_CMD_PROTECTIONS_OTD_THR,      config.otd_threshold, "DF_CMD_PROTECTIONS_OTD_THR"},
+        {DF_CMD_PROTECTIONS_OTD_RECOVERY, config.otd_recovery,  "DF_CMD_PROTECTIONS_OTD_RECOVERY"},
+        {DF_CMD_PROTECTIONS_UTD_THR,      config.utd_threshold, "DF_CMD_PROTECTIONS_UTD_THR"},
+        {DF_CMD_PROTECTIONS_UTD_RECOVERY, config.utd_recovery,  "DF_CMD_PROTECTIONS_UTD_RECOVERY"}
+    };
+
+    // Helper lambda function to write and verify temperature setting
+    auto write_and_verify = [&](uint16_t cmd, int16_t value, const char* name) -> bool {
+        bq4050_block_t block = {cmd, 2, (uint8_t*)&value, NUMBER};
+        bq4050_block_t ret = {cmd, 2, nullptr, NUMBER};
+
+        // Write the value
+        if (!this->_bq4050->write_dataflash_block(block)) {
+            dbgSerial.print("Failed to write ");
+            dbgSerial.println(name);
+            return false;
+        }
+        delay(100);
+
+        // Read back and verify
+        if (!this->_bq4050->read_dataflash_block(&ret)) {
+            dbgSerial.print("Failed to read back ");
+            dbgSerial.println(name);
+            return false;
+        }
+
+        int16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
+        float temp_celsius = read_value / 10.0f;  // Convert from 0.1°C units to °C
+        
+        dbgSerial.print(name);
+        dbgSerial.print(" set to: ");
+        dbgSerial.print(temp_celsius, 1);
+        dbgSerial.print("°C");
+        
+        if (value == read_value) {
+            dbgSerial.println(" - OK");
+            return true;
+        } else {
+            float expected_celsius = value / 10.0f;  // Convert expected value to °C
+            dbgSerial.print(" - ERROR (expected ");
+            dbgSerial.print(expected_celsius, 1);
+            dbgSerial.println("°C)");
+            return false;
+        }
+    };
+
+    // Apply all temperature protection configurations
+    for(auto& cfg : configurations) {
+        res &= write_and_verify(cfg.cmd, cfg.value, cfg.name);
+    }
+
+    /****************************************** protection enable/disable ******************************************/
+    // Configure temperature protection enable/disable for both registers:
+    // Protection Enable B - controls charge temperature protections:
+    //   Bit 4: OTD (Over Temperature Discharge) protection enable
+    //   Bit 5: OTC (Over Temperature Charge) protection enable
+    // Protection Enable D - controls discharge temperature protections:
+    //   Bit 2: UTD (Under Temperature Discharge) protection enable  
+    //   Bit 3: UTC (Under Temperature Charge) protection enable
+    
+    // Helper lambda to configure protection enable bits
+    auto configure_protection_register = [&](uint16_t cmd, uint8_t bit_mask, 
+                                             const char* reg_name, const char* bit_desc) -> bool {
+        bq4050_block_t block = {cmd, 1, nullptr, NUMBER};
+        
+        // Read current register value
+        if (!this->_bq4050->read_dataflash_block(&block)) {
+            dbgSerial.print("Failed to read ");
+            dbgSerial.println(reg_name);
+            return false;
+        }
+        
+        uint8_t register_value = block.pvalue[0];
+        uint8_t original_value = register_value;
+        
+        if (this->cmd.basic.protection.enabled) {
+            // Enable temperature protection: set specified bits
+            register_value |= bit_mask;
+            dbgSerial.print("Temperature protection enabled in ");
+            dbgSerial.print(reg_name);
+            dbgSerial.print(" (");
+            dbgSerial.print(bit_desc);
+            dbgSerial.println(" set)");
+        } else {
+            // Disable temperature protection: clear specified bits
+            register_value &= ~bit_mask;
+            dbgSerial.print("Temperature protection disabled in ");
+            dbgSerial.print(reg_name);
+            dbgSerial.print(" (");
+            dbgSerial.print(bit_desc);
+            dbgSerial.println(" cleared)");
+        }
+        
+        // Write the modified register value back to the device
+        block.pvalue[0] = register_value;
+        if (!this->_bq4050->write_dataflash_block(block)) {
+            dbgSerial.print("Failed to write ");
+            dbgSerial.println(reg_name);
+            return false;
+        }
+        delay(100);
+        
+        // Read back and verify the setting
+        bq4050_block_t verify_block = {cmd, 1, nullptr, NUMBER};
+        if (!this->_bq4050->read_dataflash_block(&verify_block)) {
+            dbgSerial.print("Failed to verify ");
+            dbgSerial.println(reg_name);
+            return false;
+        }
+        
+        uint8_t verified_value = verify_block.pvalue[0];
+        
+        dbgSerial.print(reg_name);
+        dbgSerial.print(" register: 0b");
+        for (int i = 7; i >= 0; i--) {
+            dbgSerial.print((verified_value >> i) & 1);
+        }
+        dbgSerial.print(" (0x");
+        dbgSerial.print(verified_value, HEX);
+        dbgSerial.println(")");
+        
+        // Check if bits are set correctly
+        bool bits_match_expected = ((verified_value & bit_mask) != 0) == this->cmd.basic.protection.enabled;
+        
+        if (bits_match_expected) {
+            dbgSerial.print(reg_name);
+            dbgSerial.println(" temperature protection bits verified - OK");
+            return true;
+        } else {
+            dbgSerial.print(reg_name);
+            dbgSerial.println(" temperature protection bits verification failed - ERROR");
+            dbgSerial.print("  Expected: ");
+            dbgSerial.print(this->cmd.basic.protection.enabled ? "enabled" : "disabled");
+            dbgSerial.print(", Actual bits (");
+            dbgSerial.print(bit_desc);
+            dbgSerial.print("): ");
+            dbgSerial.println((verified_value & bit_mask) != 0 ? "set" : "clear");
+            return false;
+        }
+    };
+    
+    // Configure Protection Enable B register (OTC: bit 5, OTD: bit 4)
+    const uint8_t PROTECTION_B_TEMP_MASK = 0b00110000; // Bits 4 and 5 (OTD and OTC)
+    res &= configure_protection_register(DF_CMD_SETTINGS_PROTECTIONS_ENABLE_B, 
+                                        PROTECTION_B_TEMP_MASK,
+                                        "Protection Enable B", 
+                                        "bits 4,5 OTD/OTC");
+    
+    // Configure Protection Enable D register (UTC: bit 3, UTD: bit 2)  
+    const uint8_t PROTECTION_D_TEMP_MASK = 0b00001100; // Bits 2 and 3 (UTD and UTC)
+    res &= configure_protection_register(DF_CMD_SETTINGS_PROTECTIONS_ENABLE_D,
+                                        PROTECTION_D_TEMP_MASK,
+                                        "Protection Enable D",
+                                        "bits 2,3 UTD/UTC");
 
 
-    return false;
+    return res;
 }
-
-bool MeshSolar::bat_charge_over_voltage_setting_update(){
-
-
-
-    return false;
-}
-
-bool MeshSolar::bat_discharge_over_heat_setting_update(){
-
-
-    return false;
-}
-
-bool MeshSolar::bat_charge_over_heat_setting_update(){
-
-
-    return false;
-}
-
-bool MeshSolar::bat_discharge_low_temp_setting_update(){
-
-    return false;
-}
-
-bool MeshSolar::bat_charge_low_temp_setting_update(){
-
-    return false;
-}
-
 
 bool MeshSolar::bat_fet_toggle(){
     return this->_bq4050->fet_toggle(); // Call the BQ4050 method to toggle FETs

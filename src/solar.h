@@ -6,11 +6,11 @@
 
 // Temperature protection structure
 typedef struct {
-    int     discharge_high_temp_c;          
-    bool    charge_high_temp_c;          
-    int     discharge_low_temp_c;      
-    bool    charge_low_temp_c;   
-    bool    enabled;  // Whether temperature protection is enabled     
+    int     discharge_high_temp_c;       // Discharge high temperature threshold (°C)
+    int     charge_high_temp_c;          // Charge high temperature threshold (°C)
+    int     discharge_low_temp_c;        // Discharge low temperature threshold (°C)
+    int     charge_low_temp_c;           // Charge low temperature threshold (°C)
+    bool    enabled;                     // Whether temperature protection is enabled     
 } temp_protection_t;
 
 // Battery configuration structure
@@ -117,14 +117,8 @@ public:
     bool bat_cells_setting_update ();
     bool bat_design_capacity_setting_update();
     bool bat_discharge_cutoff_voltage_setting_update();
-    bool bat_charge_cutoff_voltage_setting_update();
-    bool bat_voltage_thresholds_setting_update();
-    bool bat_charge_over_voltage_setting_update();
-    bool bat_discharge_over_heat_setting_update();
-    bool bat_charge_over_heat_setting_update();
-    bool bat_discharge_low_temp_setting_update();
-    bool bat_charge_low_temp_setting_update();
-    
+    bool bat_temp_protection_setting_update(); // Update temperature protection settings
+
     // Advanced configuration functions
     bool bat_cuv_setting_update();                    // Update Cell Under Voltage setting
     bool bat_eoc_setting_update();                    // Update End of Charge voltage setting

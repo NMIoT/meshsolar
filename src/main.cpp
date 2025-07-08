@@ -73,7 +73,6 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
             return false;
         }
         strlcpy(cmd->basic.bat_type, battery["type"] | "", sizeof(cmd->basic.bat_type));
-
         cmd->basic.cell_number = battery["cell_number"] | 0;
         cmd->basic.design_capacity = battery["design_capacity"] | 0;
         cmd->basic.discharge_cutoff_voltage = battery["cutoff_voltage"] | 0;
@@ -83,7 +82,6 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
         cmd->basic.protection.discharge_high_temp_c = tp["discharge_high_temp_c"] | 0;
         cmd->basic.protection.discharge_low_temp_c = tp["discharge_low_temp_c"] | 0;
         cmd->basic.protection.enabled = tp["temp_enabled"] | false;
-
     } 
     else if (strcmp(cmd->command, "switch") == 0) {
         if (!doc.containsKey("fet_en")) {
@@ -205,8 +203,8 @@ void loop() {
 
     input = ""; // Reset input for new command
     if(listenString(input, '\n')) {
-        // dbgSerial.print("Received command: ");
-        // dbgSerial.println(input);
+        dbgSerial.print("Received command: ");
+        dbgSerial.println(input);
         bool res = parseJsonCommand(input.c_str(), &meshsolar.cmd); // Parse the command from input
         if (res) {
             // printMeshsolarCmd(&g_bat_cmd);
@@ -230,6 +228,11 @@ void loop() {
                 res = meshsolar.bat_discharge_cutoff_voltage_setting_update();
                 dbgSerial.print(">>>>>>> bat_discharge_cutoff_voltage_setting_update result: ");
                 dbgSerial.println(res ? "Success" : "Failed");
+
+                res = meshsolar.bat_temp_protection_setting_update();
+                dbgSerial.print(">>>>>>> bat_temp_protection_setting_update result: ");
+                dbgSerial.println(res ? "Success" : "Failed");
+
 
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {

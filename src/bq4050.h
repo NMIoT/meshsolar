@@ -77,6 +77,20 @@
 #define DF_CMD_PROTECTIONS_CUV_RECOVERY_HIGH_TEMP_THR  0x4493
 #define DF_CMD_PROTECTIONS_CUV_RECOVERY_REC_TEMP_THR   0x4495
 
+#define DF_CMD_PROTECTIONS_OTD_THR                     0x44ba //discharge over temperature threshold
+#define DF_CMD_PROTECTIONS_OTD_RECOVERY                0x44bd //discharge over temperature recovery
+#define DF_CMD_PROTECTIONS_OTC_THR                     0x44b5// charge over temperature threshold
+#define DF_CMD_PROTECTIONS_OTC_RECOVERY                0x44b8// charge over temperature recovery
+
+#define DF_CMD_PROTECTIONS_UTD_THR                     0x44c9 //discharge over temperature threshold
+#define DF_CMD_PROTECTIONS_UTD_RECOVERY                0x44cc //discharge over temperature recovery
+#define DF_CMD_PROTECTIONS_UTC_THR                     0x44c4 // charge over temperature threshold
+#define DF_CMD_PROTECTIONS_UTC_RECOVERY                0x44c7 // charge over temperature recovery
+
+#define DF_CMD_SETTINGS_PROTECTIONS_ENABLE_A           0x447d // Enable/Disable protections A
+#define DF_CMD_SETTINGS_PROTECTIONS_ENABLE_B           0x447e // Enable/Disable protections B
+#define DF_CMD_SETTINGS_PROTECTIONS_ENABLE_C           0x447f // Enable/Disable protections C
+#define DF_CMD_SETTINGS_PROTECTIONS_ENABLE_D           0x4480 // Enable/Disable protections D
 
 
 #define DF_CMD_ADVANCED_CHARGE_ALG_LOW_TEMP_CHARG_VOL         0x453c
