@@ -61,47 +61,6 @@
 
 #include "SoftwareWire.h"
 
-
-// // Sets SDA low and drives output.
-// // The SDA may not be HIGH output, so first the output register is cleared
-// // (clearing internal pullup resistor), after that the SDA is set as output.
-// #define i2c_sda_lo()              \
-//   *_sdaPortReg &= ~_sdaBitMask;   \
-//   *_sdaDirReg  |=  _sdaBitMask;
-
-
-// // sets SCL low and drives output.
-// // The SCL may not be HIGH output, so first the output register is cleared
-// // (clearing internal pullup resistor), after that the SCL is set as output.
-// #define i2c_scl_lo()              \
-//   *_sclPortReg &= ~_sclBitMask;   \
-//   *_sclDirReg  |=  _sclBitMask;
-
-
-// // Set SDA high and to input (releases pin) (i.e. change to input, turn on pullup).
-// // The SDA may not become HIGH output. Therefore the pin is first set to input,
-// // after that, a pullup resistor is switched on if needed.
-// #define i2c_sda_hi()              \
-//   *_sdaDirReg &= ~_sdaBitMask;    \
-//   if(_pullups) { *_sdaPortReg |= _sdaBitMask; }
-
-
-// // set SCL high and to input (releases pin) (i.e. change to input, turn on pullup)
-// // The SCL may not become HIGH output. Therefore the pin is first set to input,
-// // after that, a pullup resistor is switched on if needed.
-// #define i2c_scl_hi()              \
-//   *_sclDirReg &= ~_sclBitMask;    \
-//   if(_pullups) { *_sclPortReg |= _sclBitMask; }
-
-
-// // Read the bit value of the pin
-// // Note that is the pin can also be read when it is an output.
-// #define i2c_sda_read()   ((uint8_t) (*_sdaPinReg & _sdaBitMask) ? 1 : 0)
-// #define i2c_scl_read()   ((uint8_t) (*_sclPinReg & _sclBitMask) ? 1 : 0)
-
-
-
-
 // Set SDA low and drive output (for nRF52840/Arduino)
 #define i2c_sda_lo()              \
   pinMode(_sdaPin, OUTPUT);       \

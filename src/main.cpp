@@ -24,34 +24,18 @@ MeshSolar    meshsolar;   // Create an instance of MeshSolar
 
 // {"command":"reset"}
 
-// static void printMeshsolarCmd(const meshsolar_cmd_t* cmd) {
-//     if (strcmp(cmd->command, "config") == 0) {
-//         dbgSerial.println("Battery Config:");
-//         dbgSerial.print("       Type: "); dbgSerial.println(cmd->battery.type);
-//         dbgSerial.print("       Cell Number: "); dbgSerial.println(cmd->battery.cell_number);
-//         dbgSerial.print("       Design Capacity: "); dbgSerial.println(cmd->battery.design_capacity);
-//         dbgSerial.print("       Cutoff Voltage: "); dbgSerial.println(cmd->battery.cutoff_voltage);
 
-//         dbgSerial.println("Temperature Protection:");
-//         dbgSerial.print("       High Temp (C): "); dbgSerial.println(cmd->temperature_protection.high_temp_c);
-//         dbgSerial.print("       High Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.high_temp_enabled ? "true" : "false");
-//         dbgSerial.print("       Low Temp (C): "); dbgSerial.println(cmd->temperature_protection.low_temp_c);
-//         dbgSerial.print("       Low Temp Enabled: "); dbgSerial.println(cmd->temperature_protection.low_temp_enabled ? "true" : "false");
-//     }
-//     else if (strcmp(cmd->command, "switch") == 0) {
-//         dbgSerial.print("FET Switch: ");
-//         dbgSerial.println(cmd->fet_en ? "ON" : "OFF");
-//     }
-//     else if (strcmp(cmd->command, "reset") == 0) {
-//         dbgSerial.println("Device Reset Command Received");
-//     }
-//     else{
-//         dbgSerial.print("Unknown command: ");
-//         dbgSerial.println(cmd->command);
-//     }
-// }
+static bool listenString(String& input, char terminator = '\n') {
+    while (comSerial.available() > 0) {
+        char c = comSerial.read();
+        if (c == terminator) return true;   
+         else input += c;                   
+    }
+    return false; 
+}
 
-static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
+
+static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, json);
     if (error) {
@@ -61,7 +45,7 @@ static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
     }
 
     // clear the command structure
-    memset(cmd, 0, sizeof(meshsolar_cmd_t));
+    memset(cmd, 0, sizeof(meshsolar_config_t));
 
     if (!doc.containsKey("command")) {
         dbgSerial.println("Missing 'command' field");
@@ -80,46 +64,52 @@ static bool parseJsonCommand(const char* json, meshsolar_cmd_t* cmd) {
             !battery.containsKey("cell_number") ||
             !battery.containsKey("design_capacity") ||
             !battery.containsKey("cutoff_voltage") ||
-            !tp.containsKey("high_temp_c") ||
-            !tp.containsKey("high_temp_enabled") ||
-            !tp.containsKey("low_temp_c") ||
-            !tp.containsKey("low_temp_enabled")) {
+            !tp.containsKey("charge_high_temp_c") ||
+            !tp.containsKey("charge_low_temp_c") ||
+            !tp.containsKey("discharge_high_temp_c") ||
+            !tp.containsKey("discharge_low_temp_c") ||
+            !tp.containsKey("temp_enabled")) {
             dbgSerial.println("Missing fields in 'battery' or 'temperature_protection'");
             return false;
         }
-        strlcpy(cmd->battery.type, battery["type"] | "", sizeof(cmd->battery.type));
-        cmd->battery.cell_number = battery["cell_number"] | 0;
-        cmd->battery.design_capacity = battery["design_capacity"] | 0;
-        cmd->battery.cutoff_voltage = battery["cutoff_voltage"] | 0;
+        strlcpy(cmd->basic.bat_type, battery["type"] | "", sizeof(cmd->basic.bat_type));
 
-        cmd->temperature_protection.high_temp_c = tp["high_temp_c"] | 0;
-        cmd->temperature_protection.high_temp_enabled = tp["high_temp_enabled"] | false;
-        cmd->temperature_protection.low_temp_c = tp["low_temp_c"] | 0;
-        cmd->temperature_protection.low_temp_enabled = tp["low_temp_enabled"] | false;
-    } else if (strcmp(cmd->command, "switch") == 0) {
+        cmd->basic.cell_number = battery["cell_number"] | 0;
+        cmd->basic.design_capacity = battery["design_capacity"] | 0;
+        cmd->basic.discharge_cutoff_voltage = battery["cutoff_voltage"] | 0;
+
+        cmd->basic.protection.charge_high_temp_c = tp["charge_high_temp_c"] | 0;
+        cmd->basic.protection.charge_low_temp_c = tp["charge_low_temp_c"] | 0;
+        cmd->basic.protection.discharge_high_temp_c = tp["discharge_high_temp_c"] | 0;
+        cmd->basic.protection.discharge_low_temp_c = tp["discharge_low_temp_c"] | 0;
+        cmd->basic.protection.enabled = tp["temp_enabled"] | false;
+
+    } 
+    else if (strcmp(cmd->command, "switch") == 0) {
         if (!doc.containsKey("fet_en")) {
             dbgSerial.println("Missing 'fet_en' field for 'switch' command");
             return false;
         }
         cmd->fet_en = doc["fet_en"] | false;
-    } else if (strcmp(cmd->command, "reset") == 0) {
+    } 
+    else if (strcmp(cmd->command, "reset") == 0) {
 
-    } else {
+    } 
+    else if (strcmp(cmd->command, "sync") == 0) {
+
+    }
+    else {
         dbgSerial.println("Unknown command");
         return false;
     }
 
+
+
+
+
     return true;
 }
 
-static bool listenString(String& input, char terminator = '\n') {
-    while (comSerial.available() > 0) {
-        char c = comSerial.read();
-        if (c == terminator) return true; // End of input
-         else input += c; // Append character to input
-    }
-    return false; // Should never reach here
-}
 
 size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     StaticJsonDocument<512> doc;
@@ -141,6 +131,55 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     return serializeJson(doc, output);
 }
 
+
+size_t meshsolarBasicConfigToJson(const basic_config_t *config, String& output) {
+    StaticJsonDocument<512> doc;
+    doc["command"] = "config";
+    doc["battery"]["bat_type"] = config->bat_type;
+    doc["battery"]["cell_number"] = config->cell_number;
+    doc["battery"]["design_capacity"] = config->design_capacity;
+    doc["battery"]["cutoff_voltage"] = config->discharge_cutoff_voltage;
+
+    JsonObject protection = doc.createNestedObject("temperature_protection");
+    protection["discharge_high_temp_c"] = config->protection.discharge_high_temp_c;
+    protection["discharge_low_temp_c"] = config->protection.discharge_low_temp_c;
+    protection["charge_high_temp_c"] = config->protection.charge_high_temp_c;
+    protection["charge_low_temp_c"] = config->protection.charge_low_temp_c;
+    protection["temp_enabled"] = config->protection.enabled;
+
+    output = "";
+    return serializeJson(doc, output);
+}
+
+
+size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& output) {
+    StaticJsonDocument<512> doc;
+    doc["command"] = config->command;
+
+    JsonObject battery = doc.createNestedObject("battery");
+    battery["cuv"] = config->battery.cuv;
+    battery["eoc"] = config->battery.eoc;
+    battery["eoc_protect"] = config->battery.eoc_protect;
+
+    JsonObject cedv = doc.createNestedObject("cedv");
+    cedv["cedv0"] = config->cedv.cedv0;
+    cedv["cedv1"] = config->cedv.cedv1;
+    cedv["cedv2"] = config->cedv.cedv2;
+    cedv["discharge_cedv0"] = config->cedv.discharge_cedv0;
+    cedv["discharge_cedv10"] = config->cedv.discharge_cedv10;
+    cedv["discharge_cedv20"] = config->cedv.discharge_cedv20;
+    cedv["discharge_cedv30"] = config->cedv.discharge_cedv30;
+    cedv["discharge_cedv40"] = config->cedv.discharge_cedv40;
+    cedv["discharge_cedv50"] = config->cedv.discharge_cedv50;
+    cedv["discharge_cedv60"] = config->cedv.discharge_cedv60;
+    cedv["discharge_cedv70"] = config->cedv.discharge_cedv70;
+    cedv["discharge_cedv80"] = config->cedv.discharge_cedv80;
+    cedv["discharge_cedv90"] = config->cedv.discharge_cedv90;
+    cedv["discharge_cedv100"] = config->cedv.discharge_cedv100;
+
+    output = "";
+    return serializeJson(doc, output);
+}
 
 void setup() {
 #if 1
@@ -173,6 +212,7 @@ void loop() {
             // printMeshsolarCmd(&g_bat_cmd);
             /*  add some func call back here base on cmd sector */
             if (0 == strcmp(meshsolar.cmd.command, "config")) {
+
                 bool res = false;
 
                 res = meshsolar.bat_type_setting_update();
@@ -201,7 +241,20 @@ void loop() {
                 dbgSerial.println("Resetting BQ4050...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
-                
+                // String json = "";
+                // size_t len = meshsolarBasicConfigToJson(&meshsolar.cmd.basic, json);
+                // if(len > 0) {
+                //     comSerial.println(json); // Send the configuration back to the serial port
+                //     dbgSerial.println(json); // Send the configuration back to the serial port
+                // }
+
+                // len = meshsolarAdvanceConfigToJson(&meshsolar.cmd.advance, json);
+                // if(len > 0) {
+                //     comSerial.println(json); // Send the configuration back to the serial port
+                //     dbgSerial.println(json); // Send the configuration back to the serial port
+                // }
+
+
                 dbgSerial.println("Sync Command Received.");
             }
             else{
@@ -218,34 +271,38 @@ void loop() {
     if(0 == cnt % 1000) {
 
         bq4050_block_t block= {
-            .cmd = DF_CMD_LEARNED_CAPACITY,
-            .len = 2,
+            .cmd = DF_CMD_SBS_DATA_CHEMISTRY,
+            .len = 5,
             .pvalue =nullptr,
-            .type = NUMBER
+            .type = STRING
         };
-        // bq4050.read_mac_block(&block); 
-        // for(uint8_t i = 0; i < block.len; i++) {
-        //     if(block.pvalue[i] < 0x10) dbgSerial.print("0");
-        //     dbgSerial.print(block.pvalue[i], HEX);
-        //     dbgSerial.print(" ");
-        // }
-
         bq4050.read_dataflash_block(&block); 
-        dbgSerial.print("DF_CMD_LEARNED_CAPACITY: ");
         for(uint8_t i = 0; i < block.len; i++) {
-            // if(0 == block.pvalue[i]) break; // Stop at null terminator
-            // dbgSerial.print((char)block.pvalue[i]); // Print as character
-            if(block.pvalue[i] < 0x10) dbgSerial.print("0");
-            dbgSerial.print(block.pvalue[i], HEX);
+            dbgSerial.print((char)block.pvalue[i]); // Print as character
         }
+
+        block.pvalue = (uint8_t *)malloc(block.len); // Allocate memory for the block data
+        if (block.pvalue == nullptr) {
+            dbgSerial.println("Memory allocation failed for block.pvalue");
+            return; // Exit if memory allocation fails
+        }
+
+        memset(block.pvalue, 0, block.len); // Initialize the block data to zero
+        const char *ddd = "lfe4"; // Custom data to write
+        block.pvalue[0] = strlen(ddd); // Set the length of the data
+        memcpy(block.pvalue + 1, ddd, strlen(ddd)); // Copy custom data into the block
+        bq4050.write_dataflash_block(block); // Write back the block to the data flash
+
+
         dbgSerial.println();
     }
 #endif
 
-#if 1
+#if 0
     if(0 == cnt % 1000) {
-        meshsolar.get_bat_status(); // Update the battery status
-        
+        meshsolar.get_bat_realtime_status(); // Update the battery status
+        meshsolar.get_bat_realtime_config(); // Update the battery configuration
+
         dbgSerial.println("================================");        
         dbgSerial.print("Battery Total Voltage: ");
         dbgSerial.print(meshsolar.sta.total_voltage, 0);
