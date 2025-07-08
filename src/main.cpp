@@ -4,6 +4,7 @@
 #include "solar.h"
 #include "SoftwareWire.h"
 #include "bq4050.h"
+#include "logger.h"
 
 #define comSerial           Serial
 #define SDA_PIN             33
@@ -39,8 +40,7 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, json);
     if (error) {
-        dbgSerial.print("Parse failed: ");
-        dbgSerial.println(error.c_str());
+        LOG_E("Failed to parse JSON: %s", error.c_str());
         return false;
     }
 
@@ -48,14 +48,16 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
     memset(cmd, 0, sizeof(meshsolar_config_t));
 
     if (!doc.containsKey("command")) {
-        dbgSerial.println("Missing 'command' field");
+        // dbgSerial.println("Missing 'command' field");
+        LOG_E("Missing 'command' field");
         return false;
     }
     strlcpy(cmd->command, doc["command"] | "", sizeof(cmd->command));
 
     if (strcmp(cmd->command, "config") == 0) {
         if (!doc.containsKey("battery") || !doc.containsKey("temperature_protection")) {
-            dbgSerial.println("Missing 'battery' or 'temperature_protection' field for 'config' command");
+            // dbgSerial.println("Missing 'battery' or 'temperature_protection' field for 'config' command");
+            LOG_E("Missing 'battery' or 'temperature_protection' field for 'config' command");
             return false;
         }
         JsonObject battery = doc["battery"];
@@ -69,7 +71,7 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
             !tp.containsKey("discharge_high_temp_c") ||
             !tp.containsKey("discharge_low_temp_c") ||
             !tp.containsKey("temp_enabled")) {
-            dbgSerial.println("Missing fields in 'battery' or 'temperature_protection'");
+            LOG_E("Missing fields in 'battery' or 'temperature_protection'");
             return false;
         }
         strlcpy(cmd->basic.bat_type, battery["type"] | "", sizeof(cmd->basic.bat_type));
@@ -85,7 +87,7 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
     } 
     else if (strcmp(cmd->command, "switch") == 0) {
         if (!doc.containsKey("fet_en")) {
-            dbgSerial.println("Missing 'fet_en' field for 'switch' command");
+            LOG_E("Missing 'fet_en' field for 'switch' command");
             return false;
         }
         cmd->fet_en = doc["fet_en"] | false;
@@ -97,7 +99,8 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
 
     }
     else {
-        dbgSerial.println("Unknown command");
+        // dbgSerial.println("Unknown command");
+        LOG_E("Unknown command");
         return false;
     }
 
@@ -189,9 +192,10 @@ void setup() {
         }
     }
 #endif
-    dbgSerial.begin(115200);            // For debugging, if needed
+    Serial2.begin(115200);              // For debugging, if needed
     bq4050.begin(&Wire, BQ4050ADDR);    // Initialize BQ4050 with SoftwareWire instance
     meshsolar.begin(&bq4050);           // Initialize MeshSolar with bq4050 instance
+    LOG_I("MeshSolar initialized successfully");
 }
 
 
@@ -203,45 +207,40 @@ void loop() {
 
     input = ""; // Reset input for new command
     if(listenString(input, '\n')) {
-        dbgSerial.print("Received command: ");
-        dbgSerial.println(input);
+        // LOG_I("%s", input.c_str());
         bool res = parseJsonCommand(input.c_str(), &meshsolar.cmd); // Parse the command from input
         if (res) {
             // printMeshsolarCmd(&g_bat_cmd);
             /*  add some func call back here base on cmd sector */
             if (0 == strcmp(meshsolar.cmd.command, "config")) {
-
                 bool res = false;
 
                 res = meshsolar.bat_type_setting_update();
-                dbgSerial.print(">>>>>>> bat_type_setting_update result: ");
-                dbgSerial.println(res ? "Success" : "Failed");
+                LOG_I(">>>>>>>>    bat_type_setting_update result: %s", res ? "Success" : "Failed");
 
                 res = meshsolar.bat_cells_setting_update();
-                dbgSerial.print(">>>>>>> bat_cells_setting_update result: ");
-                dbgSerial.println(res ? "Success" : "Failed");
+                LOG_I(">>>>>>>>    bat_cells_setting_update result: %s", res ? "Success" : "Failed");
 
                 res = meshsolar.bat_design_capacity_setting_update();
-                dbgSerial.print(">>>>>>> bat_design_capacity_setting_update result: ");
-                dbgSerial.println(res ? "Success" : "Failed");
+                LOG_I(">>>>>>>>    bat_design_capacity_setting_update result: %s", res ? "Success" : "Failed");
 
                 res = meshsolar.bat_discharge_cutoff_voltage_setting_update();
-                dbgSerial.print(">>>>>>> bat_discharge_cutoff_voltage_setting_update result: ");
-                dbgSerial.println(res ? "Success" : "Failed");
+                LOG_I(">>>>>>>>    bat_discharge_cutoff_voltage_setting_update result: %s", res ? "Success" : "Failed");
 
                 res = meshsolar.bat_temp_protection_setting_update();
-                dbgSerial.print(">>>>>>> bat_temp_protection_setting_update result: ");
-                dbgSerial.println(res ? "Success" : "Failed");
+                LOG_I(">>>>>>>>    bat_temp_protection_setting_update result: %s", res ? "Success" : "Failed");
 
 
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {
                 meshsolar.bat_fet_toggle(); // Call the callback function for FET control
-                dbgSerial.println("FET Toggle Command Received.");
+                // dbgSerial.println("FET Toggle Command Received.");
+                LOG_I("FET Toggle Command Received.");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "reset")) {
                 meshsolar.bat_reset();      // Call the callback function for reset
-                dbgSerial.println("Resetting BQ4050...");
+                // dbgSerial.println("Resetting BQ4050...");
+                LOG_I("Resetting BQ4050...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
                 // String json = "";
@@ -258,14 +257,17 @@ void loop() {
                 // }
 
 
-                dbgSerial.println("Sync Command Received.");
+                // dbgSerial.println("Sync Command Received.");
+                LOG_I("Sync Command Received.");
             }
             else{
-                dbgSerial.print("Unknown command: ");
-                dbgSerial.println(meshsolar.cmd.command);
+                // dbgSerial.print("Unknown command: ");
+                LOG_E("Unknown command: %s", meshsolar.cmd.command);
+                // dbgSerial.println(meshsolar.cmd.command);
             }
         } else {
-            dbgSerial.println("Failed to parse command");
+            // dbgSerial.println("Failed to parse command");
+            LOG_E("Failed to parse command");
         }
     }
 

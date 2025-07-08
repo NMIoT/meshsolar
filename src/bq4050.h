@@ -2,7 +2,7 @@
 #define BQ4050_H
 #include "SoftwareWire.h"
 
-#define dbgSerial           Serial2
+// #define dbgSerial           Serial2
 
 #define BQ4050ADDR          0x0B
 

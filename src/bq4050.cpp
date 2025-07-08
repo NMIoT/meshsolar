@@ -1,5 +1,6 @@
 
 #include "bq4050.h"
+#include "logger.h"
 
 
 void BQ4050::crc8_tab_init(){
@@ -24,21 +25,6 @@ void BQ4050::crc8_tab_init(){
     }
     /* store CRC value in lookup table */
     crctable[divident] = currByte;
-    if (printResults)
-    {
-      if (divident % 16 == 0 && divident > 2)
-      {
-        dbgSerial.println();
-      }
-      if (currByte < 16)
-        dbgSerial.print("0");
-      dbgSerial.print(currByte, HEX);
-      dbgSerial.print("\t");
-    }
-  }
-  if (printResults)
-  {
-    dbgSerial.println();
   }
 }
 
@@ -50,16 +36,7 @@ uint8_t BQ4050::compute_crc8(uint8_t *bytes, int byteLen){
     uint8_t data = (uint8_t)(bytes[i] ^ crc);
     /* get current CRC value = remainder */
     crc = (uint8_t)(this->crctable[data]);
-    if (this->printResults){
-      dbgSerial.print("uint8_t value: ");
-      dbgSerial.print(bytes[i], HEX);
-      dbgSerial.print("\tlookup position: ");
-      dbgSerial.print(data, HEX);
-      dbgSerial.print("\tlookup value: ");
-      dbgSerial.println(crc, HEX);
-    }
   }
-
   return crc;
 }
 
@@ -84,9 +61,10 @@ bool BQ4050::write_reg_word(bq4050_reg_t reg){
   this->wire->write(reg.value >> 8);
   uint8_t result = this->wire->endTransmission();
   if (result != 0){
-    dbgSerial.print("Write to register 0x");
-    dbgSerial.print(reg.addr, HEX);
-    dbgSerial.println(" failed.");
+    // dbgSerial.print("Write to register 0x");
+    // dbgSerial.print(reg.addr, HEX);
+    // dbgSerial.println(" failed.");
+    LOG_W("Write to register 0x%02X failed.", reg.addr);
   }
   return (result == 0); // Return true if transmission was successful
 }
@@ -135,8 +113,9 @@ bool BQ4050::_rd_mac_block(bq4050_block_t *block){
     // data len, pec not included in this len
     buf[3] = this->wire->read(); // data length
     if (buf[3] > 32) {
-        dbgSerial.print("Block data length exceeds 32 bytes, invalid data length : ");
-        dbgSerial.println(buf[3]);
+        // dbgSerial.print("Block data length exceeds 32 bytes, invalid data length : ");
+        // dbgSerial.println(buf[3]);
+        LOG_E("Block data length exceeds 32 bytes, invalid data length: %d", buf[3]);
         return false; // avoid buffer overflow
     }
 
@@ -145,7 +124,8 @@ bool BQ4050::_rd_mac_block(bq4050_block_t *block){
             buf[i + 4] = this->wire->read();
         }
         else {
-            dbgSerial.println("Block data read error, not enough data available.");
+            // dbgSerial.println("Block data read error, not enough data available.");
+            LOG_E("Block data read error, not enough data available.");
             return false; 
         }
     }
@@ -153,10 +133,11 @@ bool BQ4050::_rd_mac_block(bq4050_block_t *block){
     // Check if the command in the block matches the expected command
     // buf[4] and buf[5] is the command which is returned by the device
     if(*(uint16_t *)(buf + 4) != block->cmd){
-        dbgSerial.print("Command received: ");
-        dbgSerial.print(*(uint16_t *)(buf + 4), HEX);
-        dbgSerial.print(", expected: ");
-        dbgSerial.println(block->cmd, HEX);
+        // dbgSerial.print("Command received: ");
+        // dbgSerial.print(*(uint16_t *)(buf + 4), HEX);
+        // dbgSerial.print(", expected: ");
+        // dbgSerial.println(block->cmd, HEX);
+        LOG_E("Command received: 0x%04X, expected: 0x%04X", *(uint16_t *)(buf + 4), block->cmd);
         return false; // If the command does not match, return false
     }
 
@@ -169,7 +150,8 @@ bool BQ4050::_rd_mac_block(bq4050_block_t *block){
         }
         return (PECcheck == pec); // Compare calculated PEC with received PEC
     }
-    dbgSerial.println("Block data read error, no PEC byte received.");
+    // dbgSerial.println("Block data read error, no PEC byte received.");
+    LOG_E("Block data read error, no PEC byte received.");
     return false; // If PEC does not match, return false
 }
 
@@ -190,7 +172,8 @@ bool BQ4050::_rd_df_block(bq4050_block_t *block) {
     buf[2] = this->wire->read(); // Read the next two bytes as command
 
     if(*(uint16_t*)(buf + 1) != block->cmd) {
-        dbgSerial.print("Command mismatch!");
+        // dbgSerial.print("Command mismatch!");
+        LOG_E("Command mismatch! Expected: 0x%04X, Received: 0x%04X", block->cmd, *(uint16_t*)(buf + 1));
         return false;
     }
 
@@ -199,7 +182,8 @@ bool BQ4050::_rd_df_block(bq4050_block_t *block) {
             buf[i + 3] = this->wire->read(); // Read the data bytes
         }
         else {
-            dbgSerial.println("Block data read error, not enough data available.");
+            // dbgSerial.println("Block data read error, not enough data available.");
+            LOG_E("Block data read error, not enough data available.");
             return false; 
         }
     }
@@ -209,11 +193,13 @@ bool BQ4050::_rd_df_block(bq4050_block_t *block) {
 
 bool BQ4050::read_mac_block(bq4050_block_t *block) {
     if (!this->_wd_mac_cmd(block->cmd)) {
-        dbgSerial.println("Write MAC CMD FW failed!");
+        // dbgSerial.println("Write MAC CMD FW failed!");
+        LOG_E("Write MAC CMD FW failed!");
         return false;
     }
     if (!this->_rd_mac_block(block)) {
-        dbgSerial.println("Read MAC CMD FW failed!");
+        // dbgSerial.println("Read MAC CMD FW failed!");
+        LOG_E("Read MAC CMD FW failed!");
         return false;
     }
     return true;
@@ -239,25 +225,31 @@ bool BQ4050::write_dataflash_block(bq4050_block_t block) {
     uint8_t result = this->wire->endTransmission();
     
     if (result != 0) {
-        dbgSerial.print("Write to DF block failed with error code: ");
-        dbgSerial.print(result);
+        // dbgSerial.print("Write to DF block failed with error code: ");
+        // dbgSerial.print(result);
+        LOG_W("Write to DF block failed with error code: %d", result);
         switch(result) {
             case 1:
-                dbgSerial.println(" (Data too long to fit in transmit buffer)");
+                // dbgSerial.println(" (Data too long to fit in transmit buffer)");
+                LOG_W(" (Data too long to fit in transmit buffer)");
                 break;
             case 2:
-                dbgSerial.print(" (Received NACK on transmit of address 0x");
-                dbgSerial.print(this->devAddr, HEX);
-                dbgSerial.println(")");
+                // dbgSerial.print(" (Received NACK on transmit of address 0x");
+                // dbgSerial.print(this->devAddr, HEX);
+                // dbgSerial.println(")");
+                LOG_W(" (Received NACK on transmit of address 0x%02X)", this->devAddr);
                 break;
             case 3:
-                dbgSerial.println(" (Received NACK on transmit of data)");
+                // dbgSerial.println(" (Received NACK on transmit of data)");
+                LOG_W(" (Received NACK on transmit of data)");
                 break;
             case 4:
-                dbgSerial.println(" (Other error)");
+                // dbgSerial.println(" (Other error)");
+                LOG_W(" (SMBus error)");
                 break;
             default:
-                dbgSerial.println(" (Unknown error)");
+                // dbgSerial.println(" (Unknown error)");
+                LOG_W(" (Unknown error)");
         }
         return false; // Return false if transmission was not successful
     }
@@ -266,11 +258,13 @@ bool BQ4050::write_dataflash_block(bq4050_block_t block) {
 
 bool BQ4050::read_dataflash_block(bq4050_block_t *block) {
     if (!this->_wd_mac_cmd(block->cmd)) {
-        dbgSerial.println("Write df cmd failed!");
+        // dbgSerial.println("Write df cmd failed!");
+        LOG_E("Write df cmd failed!");
         return false;
     }
     if (!this->_rd_df_block(block)) {
-        dbgSerial.println("Read df cmd  failed!");
+        // dbgSerial.println("Read df cmd  failed!");
+        LOG_E("Read df cmd failed!");
         return false;
     }
     return true; // Return true if data was read successfully and PEC matches

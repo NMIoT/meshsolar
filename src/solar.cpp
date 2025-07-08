@@ -1,6 +1,6 @@
 #include "bq4050.h"
 #include "solar.h"
-
+#include "logger.h"
 
 MeshSolar::MeshSolar(){
     this->_bq4050 = nullptr; // Initialize pointer to null
@@ -227,7 +227,8 @@ bool MeshSolar::bat_type_setting_update(){
         bat_type = "lion"; // Set battery type to Li-ion , bq4050 uses 4 character to store chemistry name
     }
     else {
-        dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        // dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        LOG_E("Unknown battery type, exit!!!!!!!");
         return false;
     }
 
@@ -259,33 +260,29 @@ bool MeshSolar::bat_type_setting_update(){
 
         // Write the value
         if (!this->_bq4050->write_dataflash_block(block)) {
-            dbgSerial.print("Failed to write ");
-            dbgSerial.println(name);
+            // dbgSerial.print("Failed to write ");
+            // dbgSerial.println(name);
+            LOG_E("Failed to write %s", name);
             return false;
         }
         delay(100);
 
         // Read back and verify
         if (!this->_bq4050->read_dataflash_block(&ret)) {
-            dbgSerial.print("Failed to read back ");
-            dbgSerial.println(name);
+            // dbgSerial.print("Failed to read back ");
+            // dbgSerial.println(name);
+            LOG_E("Failed to read back %s", name);
             return false;
         }
 
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
-        dbgSerial.print(name);
-        dbgSerial.print(" set to: ");
-        dbgSerial.print(read_value);
-        dbgSerial.print(" mV");
-        
-        if (value == read_value) {
-            dbgSerial.println(" - OK");
-            return true;
-        } else {
-            dbgSerial.print(" - ERROR (expected ");
-            dbgSerial.print(value);
-            dbgSerial.println(" mV)");
-            return false;
+        if(value == read_value) {
+            LOG_W("%s set to: %d mV - OK", name, read_value);
+            return true; // Return true if the value matches
+        }
+        else{
+            LOG_E("%s set to: %d mV - ERROR (expected %d mV)", name, read_value, value);
+            return false; // Return false if the value does not match
         }
 
         return (value == read_value);
@@ -304,7 +301,7 @@ bool MeshSolar::bat_type_setting_update(){
     block.type = STRING; // Set block type to STRING
     block.pvalue = (uint8_t*)malloc(block.len + 1); // Allocate memory for the value
     if (block.pvalue == nullptr) {
-        dbgSerial.println("Memory allocation failed for block.pvalue");
+        LOG_E("Memory allocation failed for block.pvalue");
         free(block.pvalue); // Free memory if allocation fails
         return false; // Return false if memory allocation fails
     }
@@ -322,13 +319,11 @@ bool MeshSolar::bat_type_setting_update(){
     ret.len = block.len; // Length of the data block to read
     ret.type = block.type; // Set block type to STRING
     this->_bq4050->read_dataflash_block(&ret); // Read the battery type back from data flash
-    dbgSerial.print("DF_CMD_SBS_DATA_CHEMISTRY after: ");
-    dbgSerial.print((const char *)(ret.pvalue)); // Print the read battery type
     if(0 == strcasecmp((const char *)(ret.pvalue), bat_type)) {
-        dbgSerial.println(" - OK");
+        LOG_W("DF_CMD_SBS_DATA_CHEMISTRY after: %s - OK", (const char *)(ret.pvalue)); // Log success
     }
     else {
-        dbgSerial.println(" - ERROR");
+        LOG_E("DF_CMD_SBS_DATA_CHEMISTRY after: %s - ERROR", (const char *)(ret.pvalue)); // Log error
         res = false; // If the read value does not match, set result to false
     }
 
@@ -364,8 +359,9 @@ bool MeshSolar::bat_cells_setting_update() {
     ret.type = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret); // Read current DA configuration again
-    dbgSerial.print("DF_CMD_DA_CONFIGURATION after: 0x");
-    dbgSerial.println(ret.pvalue[0], HEX);
+    // dbgSerial.print("DF_CMD_DA_CONFIGURATION after: 0x");
+    // dbgSerial.println(ret.pvalue[0], HEX);
+    LOG_W("DF_CMD_DA_CONFIGURATION after: 0x%02X", ret.pvalue[0]); // Log the read DA configuration
     res &= (ret.pvalue[0] == block.pvalue[0]);
     /********************************************** Gauging—>Design—>Design Voltage *****************************************************/
     uint16_t voltage = 0; // Initialize voltage variable
@@ -376,7 +372,8 @@ bool MeshSolar::bat_cells_setting_update() {
         voltage = 4200;
     }
     else {
-        dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        // dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        LOG_E("Unknown battery type, exit!!!!!!!");
         return false;
     }
     voltage = this->cmd.basic.cell_number * voltage; // Set design voltage based on cell count
@@ -393,8 +390,9 @@ bool MeshSolar::bat_cells_setting_update() {
     ret.len = 2; // Length of the data block to read
 
     this->_bq4050->read_dataflash_block(&ret); // Read current DA configuration again
-    dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV after: 0x");
-    dbgSerial.println(ret.pvalue[0], HEX);
+    // dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV after: 0x");
+    // dbgSerial.println(ret.pvalue[0], HEX);
+    LOG_W("DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV after: 0x%02X", ret.pvalue[0]); // Log the read design voltage
     res &= (*(uint16_t*)(ret.pvalue) == voltage); // Verify the voltage setting
 
 
@@ -419,9 +417,10 @@ bool MeshSolar::bat_design_capacity_setting_update(){
     ret.type = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret);
-    dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH after: ");
-    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
-    dbgSerial.println(" mAh");
+    // dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH after: ");
+    // dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    // dbgSerial.println(" mAh");
+    LOG_W("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH after: %d mAh", ret.pvalue[0] | (ret.pvalue[1] << 8)); // Log the read design capacity
 
     res &= (capacity == *(uint16_t*)(ret.pvalue));
     /*************************************** Gas Gauging—>Design—>Design Capacity cWh ******************************************/
@@ -433,7 +432,8 @@ bool MeshSolar::bat_design_capacity_setting_update(){
         voltage = 4.2f;
     }
     else {
-        dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        // dbgSerial.println("Unknown battery type, exit!!!!!!!");
+        LOG_E("Unknown battery type, exit!!!!!!!");
         return false;
     }
     capacity = this->cmd.basic.design_capacity; // Set the design capacity value
@@ -451,9 +451,10 @@ bool MeshSolar::bat_design_capacity_setting_update(){
     ret.type = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret);
-    dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH after: ");
-    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
-    dbgSerial.println(" cWh");
+    // dbgSerial.print("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH after: ");
+    // dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
+    // dbgSerial.println(" cWh");
+    LOG_W("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH after: %d cWh", ret.pvalue[0] | (ret.pvalue[1] << 8)); // Log the read design capacity in cWh
 
     res &= (capacity == *(uint16_t*)(ret.pvalue));
     /*************************************** Gas Gauging—>State—>Learned Full Charge Capacity mAh ******************************************/
@@ -471,9 +472,7 @@ bool MeshSolar::bat_design_capacity_setting_update(){
     ret.type = NUMBER; // Set block type to NUMBER
 
     this->_bq4050->read_dataflash_block(&ret);
-    dbgSerial.print("DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY after: ");
-    dbgSerial.print(ret.pvalue[0] | (ret.pvalue[1] << 8), DEC); // Combine the two bytes into a single value
-    dbgSerial.println(" mAh");
+    LOG_W("DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY after: %d mAh", ret.pvalue[0] | (ret.pvalue[1] << 8)); // Log the read learned capacity
     res &= (capacity == *(uint16_t*)(ret.pvalue));
 
     return res;
@@ -513,32 +512,23 @@ bool MeshSolar::bat_discharge_cutoff_voltage_setting_update(){
 
         // Write the value
         if (!this->_bq4050->write_dataflash_block(block)) {
-            dbgSerial.print("Failed to write :");
-            dbgSerial.println(name);
+            LOG_E("Failed to write %s", name);
             return false;
         }
         delay(100);
 
         // Read back and verify
         if (!this->_bq4050->read_dataflash_block(&ret)) {
-            dbgSerial.print("Failed to read back :");
-            dbgSerial.println(name);
+            LOG_E("Failed to read back %s", name);
             return false;
         }
 
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
-        dbgSerial.print(name);
-        dbgSerial.print(" set to: ");
-        dbgSerial.print(read_value);
-        dbgSerial.print(" mV");
-        
         if (value == read_value) {
-            dbgSerial.println(" - OK");
+            LOG_W("%s set to: %d mV - OK", name, read_value); // Log success
             return true;
         } else {
-            dbgSerial.print(" - ERROR (expected ");
-            dbgSerial.print(value);
-            dbgSerial.println(" mV)");
+            LOG_E("%s set to: %d mV - ERROR (expected %d mV)", name, read_value, value); // Log error
             return false;
         }
     };
@@ -614,17 +604,21 @@ bool MeshSolar::bat_temp_protection_setting_update() {
 
     // Validate temperature ranges (basic sanity check)
     if (charge_low >= charge_high || discharge_low >= discharge_high) {
-        dbgSerial.println("ERROR: Invalid temperature ranges in configuration");
-        dbgSerial.print("  Charge: ");
-        dbgSerial.print(charge_low);
-        dbgSerial.print("°C to ");
-        dbgSerial.print(charge_high);
-        dbgSerial.println("°C");
-        dbgSerial.print("  Discharge: ");
-        dbgSerial.print(discharge_low);
-        dbgSerial.print("°C to ");
-        dbgSerial.print(discharge_high);
-        dbgSerial.println("°C");
+        // dbgSerial.println("ERROR: Invalid temperature ranges in configuration");
+        // dbgSerial.print("  Charge: ");
+        // dbgSerial.print(charge_low);
+        // dbgSerial.print("°C to ");
+        // dbgSerial.print(charge_high);
+        // dbgSerial.println("°C");
+        // dbgSerial.print("  Discharge: ");
+        // dbgSerial.print(discharge_low);
+        // dbgSerial.print("°C to ");
+        // dbgSerial.print(discharge_high);
+        // dbgSerial.println("°C");
+        LOG_E("ERROR: Invalid temperature ranges in configuration");
+        LOG_E("  Charge: %d°C to %d°C", charge_low, charge_high);
+        LOG_E("  Discharge: %d°C to %d°C", discharge_low, discharge_high);
+
         return false;
     }
 
@@ -662,35 +656,25 @@ bool MeshSolar::bat_temp_protection_setting_update() {
 
         // Write the value
         if (!this->_bq4050->write_dataflash_block(block)) {
-            dbgSerial.print("Failed to write ");
-            dbgSerial.println(name);
+            LOG_E("Failed to write %s", name);
             return false;
         }
         delay(100);
 
         // Read back and verify
         if (!this->_bq4050->read_dataflash_block(&ret)) {
-            dbgSerial.print("Failed to read back ");
-            dbgSerial.println(name);
+            LOG_E("Failed to read back %s", name);
             return false;
         }
 
         int16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
         float temp_celsius = read_value / 10.0f;  // Convert from 0.1°C units to °C
-        
-        dbgSerial.print(name);
-        dbgSerial.print(" set to: ");
-        dbgSerial.print(temp_celsius, 1);
-        dbgSerial.print("°C");
-        
         if (value == read_value) {
-            dbgSerial.println(" - OK");
+            LOG_W("%s set to: %.1f°C - OK", name, temp_celsius); // Log success
             return true;
         } else {
             float expected_celsius = value / 10.0f;  // Convert expected value to °C
-            dbgSerial.print(" - ERROR (expected ");
-            dbgSerial.print(expected_celsius, 1);
-            dbgSerial.println("°C)");
+            LOG_E("%s set to: %.1f°C - ERROR (expected %.1f°C)", name, temp_celsius, expected_celsius); // Log error
             return false;
         }
     };
@@ -716,8 +700,9 @@ bool MeshSolar::bat_temp_protection_setting_update() {
         
         // Read current register value
         if (!this->_bq4050->read_dataflash_block(&block)) {
-            dbgSerial.print("Failed to read ");
-            dbgSerial.println(reg_name);
+            // dbgSerial.print("Failed to read ");
+            // dbgSerial.println(reg_name);
+            LOG_E("Failed to read %s", reg_name);
             return false;
         }
         
@@ -727,26 +712,17 @@ bool MeshSolar::bat_temp_protection_setting_update() {
         if (this->cmd.basic.protection.enabled) {
             // Enable temperature protection: set specified bits
             register_value |= bit_mask;
-            dbgSerial.print("Temperature protection enabled in ");
-            dbgSerial.print(reg_name);
-            dbgSerial.print(" (");
-            dbgSerial.print(bit_desc);
-            dbgSerial.println(" set)");
+            LOG_W("Temperature protection enabled in %s (%s set)", reg_name, bit_desc);
         } else {
             // Disable temperature protection: clear specified bits
             register_value &= ~bit_mask;
-            dbgSerial.print("Temperature protection disabled in ");
-            dbgSerial.print(reg_name);
-            dbgSerial.print(" (");
-            dbgSerial.print(bit_desc);
-            dbgSerial.println(" cleared)");
+            LOG_W("Temperature protection disabled in %s (%s cleared)", reg_name, bit_desc);
         }
         
         // Write the modified register value back to the device
         block.pvalue[0] = register_value;
         if (!this->_bq4050->write_dataflash_block(block)) {
-            dbgSerial.print("Failed to write ");
-            dbgSerial.println(reg_name);
+            LOG_E("Failed to write %s", reg_name);
             return false;
         }
         delay(100);
@@ -754,38 +730,26 @@ bool MeshSolar::bat_temp_protection_setting_update() {
         // Read back and verify the setting
         bq4050_block_t verify_block = {cmd, 1, nullptr, NUMBER};
         if (!this->_bq4050->read_dataflash_block(&verify_block)) {
-            dbgSerial.print("Failed to verify ");
-            dbgSerial.println(reg_name);
+            LOG_E("Failed to verify %s", reg_name);
             return false;
         }
         
         uint8_t verified_value = verify_block.pvalue[0];
-        
-        dbgSerial.print(reg_name);
-        dbgSerial.print(" register: 0b");
-        for (int i = 7; i >= 0; i--) {
-            dbgSerial.print((verified_value >> i) & 1);
-        }
-        dbgSerial.print(" (0x");
-        dbgSerial.print(verified_value, HEX);
-        dbgSerial.println(")");
+        LOG_W("%s register: 0b%08b (0x%02X)", reg_name, verified_value, verified_value); // Log the register value
         
         // Check if bits are set correctly
         bool bits_match_expected = ((verified_value & bit_mask) != 0) == this->cmd.basic.protection.enabled;
         
         if (bits_match_expected) {
-            dbgSerial.print(reg_name);
-            dbgSerial.println(" temperature protection bits verified - OK");
+            LOG_W("%s temperature protection bits verified - OK", reg_name); // Log success
             return true;
         } else {
-            dbgSerial.print(reg_name);
-            dbgSerial.println(" temperature protection bits verification failed - ERROR");
-            dbgSerial.print("  Expected: ");
-            dbgSerial.print(this->cmd.basic.protection.enabled ? "enabled" : "disabled");
-            dbgSerial.print(", Actual bits (");
-            dbgSerial.print(bit_desc);
-            dbgSerial.print("): ");
-            dbgSerial.println((verified_value & bit_mask) != 0 ? "set" : "clear");
+            LOG_E("%s temperature protection bits verification failed - ERROR", reg_name); // Log error
+            LOG_E("  Expected: %s, Actual bits (%s): %s", 
+                  this->cmd.basic.protection.enabled ? "enabled" : "disabled",
+                  bit_desc,
+                  (verified_value & bit_mask) != 0 ? "set" : "clear");
+
             return false;
         }
     };
