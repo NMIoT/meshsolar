@@ -90,7 +90,7 @@ bool MeshSolar::get_bat_realtime_status(){
     return true; // Return true to indicate status update was successful
 }
 
-bool MeshSolar::get_bat_realtime_config(){
+bool MeshSolar::get_bat_realtime_basic_config(){
     bq4050_block_t block= {
         .cmd = DF_CMD_SBS_DATA_CHEMISTRY,
         .len = 5,
@@ -195,6 +195,128 @@ bool MeshSolar::get_bat_realtime_config(){
     LOG_D("Temperature protection overall status: %s", this->sync_rsp.basic.protection.enabled ? "ENABLED" : "DISABLED");
 
     return true; // Return false to indicate configuration update was successful
+}
+
+bool MeshSolar::get_bat_realtime_advance_config(){
+    bq4050_block_t block = {0, 0, nullptr, NUMBER};
+    
+    /*
+     * Read advanced battery configuration from BQ4050
+     * 
+     * This function reads the advanced configuration parameters that correspond
+     * to the settings configured in bat_advance_battery_config_update() and
+     * bat_advance_cedv_setting_update() functions.
+     */
+    
+    /*****************************************  CUV (Cell Under Voltage) Protection  *************************************/
+    block.cmd = DF_CMD_PROTECTIONS_CUV_THR;
+    block.len = 2;
+    block.type = NUMBER;
+    if (!this->_bq4050->read_dataflash_block(&block)) {
+        LOG_E("Failed to read CUV threshold");
+        return false;
+    }
+    this->sync_rsp.advance.battery.cuv = (block.pvalue[1] << 8) | block.pvalue[0];
+    LOG_D("CUV threshold: %d mV", this->sync_rsp.advance.battery.cuv);
+    
+    /*****************************************  EOC (End of Charge) Voltage  *************************************/
+    // Read from standard temperature charge voltage (represents EOC setting)
+    block.cmd = DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL;
+    block.len = 2;
+    block.type = NUMBER;
+    if (!this->_bq4050->read_dataflash_block(&block)) {
+        LOG_E("Failed to read EOC voltage");
+        return false;
+    }
+    this->sync_rsp.advance.battery.eoc = (block.pvalue[1] << 8) | block.pvalue[0];
+    LOG_D("EOC voltage: %d mV", this->sync_rsp.advance.battery.eoc);
+    
+    /*****************************************  EOC Protection Voltage  *************************************/
+    // Read from standard temperature COV threshold (represents EOC protection setting)
+    block.cmd = DF_CMD_PROTECTIONS_COV_STD_TEMP_THR;
+    block.len = 2;
+    block.type = NUMBER;
+    if (!this->_bq4050->read_dataflash_block(&block)) {
+        LOG_E("Failed to read EOC protection voltage");
+        return false;
+    }
+    this->sync_rsp.advance.battery.eoc_protect = (block.pvalue[1] << 8) | block.pvalue[0];
+    LOG_D("EOC protection voltage: %d mV", this->sync_rsp.advance.battery.eoc_protect);
+    
+    /*****************************************  CEDV Fixed Values  *************************************/
+    // Read CEDV fixed EDV0
+    block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0;
+    block.len = 2;
+    block.type = NUMBER;
+    if (!this->_bq4050->read_dataflash_block(&block)) {
+        LOG_E("Failed to read CEDV0");
+        return false;
+    }
+    this->sync_rsp.advance.cedv.cedv0 = (block.pvalue[1] << 8) | block.pvalue[0];
+    
+    // Read CEDV fixed EDV1
+    block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1;
+    block.len = 2;
+    block.type = NUMBER;
+    if (!this->_bq4050->read_dataflash_block(&block)) {
+        LOG_E("Failed to read CEDV1");
+        return false;
+    }
+    this->sync_rsp.advance.cedv.cedv1 = (block.pvalue[1] << 8) | block.pvalue[0];
+    
+    // Read CEDV fixed EDV2
+    block.cmd = DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2;
+    block.len = 2;
+    block.type = NUMBER;
+    if (!this->_bq4050->read_dataflash_block(&block)) {
+        LOG_E("Failed to read CEDV2");
+        return false;
+    }
+    this->sync_rsp.advance.cedv.cedv2 = (block.pvalue[1] << 8) | block.pvalue[0];
+    
+    /*****************************************  CEDV Discharge Profile Values  *************************************/
+    // Configuration table for CEDV discharge profile readings
+    struct cedv_read_entry_t {
+        uint16_t cmd;
+        int* target_field;
+        const char* name;
+    };
+    
+    cedv_read_entry_t cedv_readings[] = {
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0,   &this->sync_rsp.advance.cedv.discharge_cedv0,   "Discharge CEDV 0%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_10,  &this->sync_rsp.advance.cedv.discharge_cedv10,  "Discharge CEDV 10%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_20,  &this->sync_rsp.advance.cedv.discharge_cedv20,  "Discharge CEDV 20%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_30,  &this->sync_rsp.advance.cedv.discharge_cedv30,  "Discharge CEDV 30%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_40,  &this->sync_rsp.advance.cedv.discharge_cedv40,  "Discharge CEDV 40%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_50,  &this->sync_rsp.advance.cedv.discharge_cedv50,  "Discharge CEDV 50%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_60,  &this->sync_rsp.advance.cedv.discharge_cedv60,  "Discharge CEDV 60%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_70,  &this->sync_rsp.advance.cedv.discharge_cedv70,  "Discharge CEDV 70%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_80,  &this->sync_rsp.advance.cedv.discharge_cedv80,  "Discharge CEDV 80%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_90,  &this->sync_rsp.advance.cedv.discharge_cedv90,  "Discharge CEDV 90%"},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100, &this->sync_rsp.advance.cedv.discharge_cedv100, "Discharge CEDV 100%"}
+    };
+    
+    // Helper lambda to read CEDV values
+    auto read_cedv_value = [&](uint16_t cmd, int* target, const char* name) -> bool {
+        block.cmd = cmd;
+        block.len = 2;
+        block.type = NUMBER;
+        if (!this->_bq4050->read_dataflash_block(&block)) {
+            LOG_E("Failed to read %s", name);
+            return false;
+        }
+        *target = (block.pvalue[1] << 8) | block.pvalue[0];
+        LOG_D("%s: %d mV", name, *target);
+        return true;
+    };
+    
+    // Read all CEDV discharge profile values
+    for (auto& entry : cedv_readings) {
+        if (!read_cedv_value(entry.cmd, entry.target_field, entry.name)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool MeshSolar::bat_basic_type_setting_update(){ 

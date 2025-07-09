@@ -127,8 +127,8 @@ public:
     bool bat_reset();
 
     bool get_bat_realtime_status();
-    bool get_bat_realtime_config();
-    
+    bool get_bat_realtime_basic_config();
+    bool get_bat_realtime_advance_config();
 };
 
 

@@ -175,9 +175,6 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
 
 size_t meshsolarBasicConfigToJson(const basic_config_t *basic, String& output) {
     StaticJsonDocument<512> doc;
-
-    LOG_W("bat type: %s", basic->type);
-
     doc["command"] = "config";
     doc["battery"]["type"] = String(basic->type);
     doc["battery"]["cell_number"] = basic->cell_number;
@@ -225,16 +222,8 @@ size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& outp
 }
 
 void setup() {
-#if 1
+    Serial2.begin(115200);      // For debugging, if needed
     comSerial.begin(115200); 
-    time_t timeout = millis();
-    while (!comSerial){
-        if ((millis() - timeout) < 10000){
-        delay(100);
-        }
-    }
-#endif
-    Serial2.begin(115200);              // For debugging, if needed
     bq4050.begin(&Wire, BQ4050ADDR);    // Initialize BQ4050 with SoftwareWire instance
     meshsolar.begin(&bq4050);           // Initialize MeshSolar with bq4050 instance
     LOG_I("MeshSolar initialized successfully");
@@ -296,21 +285,22 @@ void loop() {
                 static bool first_sync = true;
                 String json = "";
                 if(first_sync) {
-                    meshsolar.get_bat_realtime_config(); // Update the battery configuration
+                    meshsolar.get_bat_realtime_basic_config(); // Update the battery configuration
+                    meshsolar.get_bat_realtime_advance_config(); // Update the battery advanced configuration
                     first_sync = false; // Set to false after the first sync
                 }
-                
+
                 size_t len = meshsolarBasicConfigToJson(&meshsolar.sync_rsp.basic, json);
                 if(len > 0) {
                     comSerial.println(json); // Send the configuration back to the serial port
-                    LOG_W("Sync : %s", json.c_str());
+                    LOG_D("Sync : %s", json.c_str());
                 }
 
-                // len = meshsolarAdvanceConfigToJson(&meshsolar.cmd.advance, json);
-                // if(len > 0) {
-                //     comSerial.println(json); // Send the configuration back to the serial port
-                //     dbgSerial.println(json); // Send the configuration back to the serial port
-                // }
+                len = meshsolarAdvanceConfigToJson(&meshsolar.sync_rsp.advance, json);
+                if(len > 0) {
+                    comSerial.println(json); // Send the configuration back to the serial port
+                    LOG_D("Sync : %s", json.c_str());
+                }
 
                 LOG_I("Sync Command Received.");
             }
@@ -357,7 +347,8 @@ void loop() {
 #if 1
     if(0 == cnt % 1000) {
         meshsolar.get_bat_realtime_status(); // Update the battery status
-        meshsolar.get_bat_realtime_config(); // Update the battery configuration
+        meshsolar.get_bat_realtime_basic_config(); // Update the battery configuration
+        meshsolar.get_bat_realtime_advance_config(); // Update the battery advanced configuration
     }
 #endif
 
@@ -367,8 +358,6 @@ void loop() {
         strlcpy(meshsolar.sta.command, "status", sizeof(meshsolar.sta.command));
         String json = "";
         meshsolarStatusToJson(&meshsolar.sta, json);
-        // dbgSerial.print("JSON Status: ");
-        // dbgSerial.println(json);
         comSerial.println(json);
     }
 #endif
