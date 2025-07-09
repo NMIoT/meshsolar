@@ -61,9 +61,6 @@ bool BQ4050::write_reg_word(bq4050_reg_t reg){
   this->wire->write(reg.value >> 8);
   uint8_t result = this->wire->endTransmission();
   if (result != 0){
-    // dbgSerial.print("Write to register 0x");
-    // dbgSerial.print(reg.addr, HEX);
-    // dbgSerial.println(" failed.");
     LOG_W("Write to register 0x%02X failed.", reg.addr);
   }
   return (result == 0); // Return true if transmission was successful
@@ -119,7 +116,7 @@ bool BQ4050::_rd_mac_block(bq4050_block_t *block){
 
     // data len, pec not included in this len
     buf[3] = this->wire->read(); // data length
-    LOG_W("Block data length: %d Bytes", buf[3]);
+    LOG_D("Block data length: %d Bytes", buf[3]);
 
     for (uint8_t i = 0; i < buf[3]; i++) {
         if (this->wire->available()){
@@ -146,8 +143,6 @@ bool BQ4050::_rd_mac_block(bq4050_block_t *block){
             block->pvalue = buf + 4 + 2; // Assign the data to the block pointer, jump buf[4] and buf[5] which are the command bytes
             block->len    = buf[3] - 2;  // Set the length of the block
         }
-        dbg::hex_print(buf, block->len, "RawData+PEC");
-        LOG_W("PEC calculated: 0x%02X, PEC received: 0x%02X", PECcheck, pec);
         return (PECcheck == pec); // Compare calculated PEC with received PEC
     }
     LOG_E("Block data read error, no PEC byte received.");

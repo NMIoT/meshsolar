@@ -314,36 +314,36 @@ void loop() {
     }
 
 
-#if 1 // debugging section
+#if 0 // debugging section
     if(0 == cnt % 1000) {
         bq4050_block_t block = {0,0,nullptr}; // Initialize block structure
-        // DAStatus1_t da1 = {0,};
-        // block.cmd = MAC_CMD_DA_STATUS1; // Command to read cell voltage
-        // block.len = 32;                 
+        DAStatus1_t da1 = {0,};
+        block.cmd = MAC_CMD_DA_STATUS1; // Command to read cell voltage
+        block.len = 32;                 
 
-        // if(bq4050.read_mac_block(&block)){
-        //     memcpy(&da1, block.pvalue, sizeof(DAStatus1_t)); // Copy the data into the da1 structure
-        //     dbg::hex_print((uint8_t*)&da1, sizeof(DAStatus1_t),"DAStatus1");
-        // } 
-        // delay(10); 
-
-
-
-        DAStatus2_t da2 = {0,};
-        block.cmd = MAC_CMD_DA_STATUS2; // Command to read cell voltage
-        block.len = 14;                 
-
-       if(bq4050.read_mac_block(&block)){
-            memcpy(&da2, block.pvalue, sizeof(DAStatus2_t)); // Copy the data into the da1 structure
-            dbg::hex_print((uint8_t*)&da2, sizeof(DAStatus2_t),"DAStatus2");
+        if(bq4050.read_mac_block(&block)){
+            memcpy(&da1, block.pvalue, sizeof(DAStatus1_t)); // Copy the data into the da1 structure
+            dbg::hex_print((uint8_t*)&da1, sizeof(DAStatus1_t),"DAStatus1");
         } 
         delay(10); 
+
+
+
+    //     DAStatus2_t da2 = {0,};
+    //     block.cmd = MAC_CMD_DA_STATUS2; // Command to read cell voltage
+    //     block.len = 14;                 
+
+    //    if(bq4050.read_mac_block(&block)){
+    //         memcpy(&da2, block.pvalue, sizeof(DAStatus2_t)); // Copy the data into the da1 structure
+    //         dbg::hex_print((uint8_t*)&da2, sizeof(DAStatus2_t),"DAStatus2");
+    //     } 
+    //     delay(10); 
 
     }
 #endif
 
 
-#if 0
+#if 1
     if(0 == cnt % 1000) {
         meshsolar.get_bat_realtime_status(); // Update the battery status
         meshsolar.get_bat_realtime_basic_config(); // Update the battery configuration

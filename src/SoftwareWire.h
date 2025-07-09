@@ -12,7 +12,7 @@
 #define SOFTWAREWIRE_DATA_NACK      3
 #define SOFTWAREWIRE_OTHER          4
 
-#define SOFTWAREWIRE_BUFSIZE 32        // same as buffer size of Arduino Wire library
+#define SOFTWAREWIRE_BUFSIZE        64        // same as buffer size of Arduino Wire library
 
 
 class SoftwareWire

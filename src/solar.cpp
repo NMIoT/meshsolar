@@ -62,7 +62,6 @@ bool MeshSolar::get_bat_realtime_status(){
     DAStatus2_t da2 = {0,};
     block.cmd = MAC_CMD_DA_STATUS2; // Command to read cell temperatures
     block.len = 14;                 // 14 bytes for cell temperatures
-
     this->_bq4050->read_mac_block(&block); // Read the data block from the BQ4050
     memcpy(&da2, block.pvalue, sizeof(DAStatus2_t)); // Copy the data into the da2 structure
     delay(10); 
@@ -73,14 +72,27 @@ bool MeshSolar::get_bat_realtime_status(){
     this->sta.cells[3].temperature = (this->sta.cell_count >= 4) ? da2.ts4_temp / 10.0f - 273.15f : 0.0f;
 
     /**************************************************** get cell voltage *********************************************/
-    for (uint8_t i = 0; i < this->sta.cell_count; i++) {
-        this->sta.cells[i].cell_num = i + 1;
-        reg.addr = BQ4050_CELL1_VOLTAGE - i; // Cell1=0x3F, Cell2=0x3E, Cell3=0x3D, Cell4=0x3C
-        res = this->_bq4050->read_reg_word(&reg); 
-        this->sta.cells[i].voltage = (res) ? reg.value : this->sta.cells[i].voltage; // Convert from mV to V
-        delay(10); 
-    }
-
+    DAStatus1_t da1 = {0,};
+    block.cmd = MAC_CMD_DA_STATUS1; // Command to read cell temperatures
+    block.len = 32;                 // 14 bytes for cell temperatures
+    this->_bq4050->read_mac_block(&block); // Read the data block from the BQ4050
+    memcpy(&da1, block.pvalue, sizeof(DAStatus1_t)); // Copy the data into the da1 structure
+    delay(10); 
+    // LOG_W("cell 1 : %d mV", da1.cell_1_voltage);
+    // LOG_W("cell 2 : %d mV", da1.cell_2_voltage);
+    // LOG_W("cell 3 : %d mV", da1.cell_3_voltage);
+    // LOG_W("cell 4 : %d mV", da1.cell_4_voltage);
+    // LOG_W("bat    : %d mV", da1.bat_voltage);
+    // LOG_W("pack   : %d mV", da1.pack_voltage);
+    // LOG_W("===========================================================");
+    this->sta.cells[0].cell_num = 1;
+    this->sta.cells[0].voltage = (this->sta.cell_count >= 1) ? da1.cell_1_voltage : 0.0f; 
+    this->sta.cells[1].cell_num = 2;
+    this->sta.cells[1].voltage = (this->sta.cell_count >= 2) ? da1.cell_2_voltage : 0.0f; 
+    this->sta.cells[2].cell_num = 3;
+    this->sta.cells[2].voltage = (this->sta.cell_count >= 3) ? da1.cell_3_voltage : 0.0f; 
+    this->sta.cells[3].cell_num = 4;
+    this->sta.cells[3].voltage = (this->sta.cell_count >= 4) ? da1.cell_4_voltage : 0.0f; 
     /**************************************************** get learned capacity ********************************************/
     reg.addr = BQ4050_REG_FCC; 
     res  = this->_bq4050->read_reg_word(&reg);
