@@ -62,6 +62,27 @@ typedef struct {
 
 
 
+
+typedef struct {
+    uint16_t cell_1_voltage;  // Cell 1 voltage (mV)
+    uint16_t cell_2_voltage;  // Cell 2 voltage (mV)
+    uint16_t cell_3_voltage;  // Cell 3 voltage (mV)
+    uint16_t cell_4_voltage;  // Cell 4 voltage (mV)
+    uint16_t bat_voltage;     // Battery voltage (mV)
+    uint16_t pack_voltage;    // Pack voltage (mV)
+    uint16_t cell_1_current;  // Cell 1 current (mA)
+    uint16_t cell_2_current;  // Cell 2 current (mA)
+    uint16_t cell_3_current;  // Cell 3 current (mA)
+    uint16_t cell_4_current;  // Cell 4 current (mA)
+    uint16_t cell_1_power;    // Cell 1 power (cW)
+    uint16_t cell_2_power;    // Cell 2 power (cW)
+    uint16_t cell_3_power;    // Cell 3 power (cW)
+    uint16_t cell_4_power;    // Cell 4 power (cW)
+    uint16_t power;           // Total power (cW)
+    uint16_t avg_power;       // Average power (cW)
+} DAStatus1_t;
+
+
 typedef struct {
     int16_t int_temp;        // Internal temperature (units: 0.1K)
     int16_t ts1_temp;        // Temperature sensor 1 (units: 0.1K)

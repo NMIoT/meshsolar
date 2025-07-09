@@ -12,10 +12,10 @@
 #include <Arduino.h>
 #include <cstring>
 
-// Allow external definition of LOG_COLOR_ENABLE
+// Allow external definition of LOG_ANSI_COLOR_ENABLE
 // If not defined externally, default to enabled (1)
-#ifndef LOG_COLOR_ENABLE
-#define LOG_COLOR_ENABLE 1  // Default: 1: Enable color, 0: Disable color
+#ifndef LOG_ANSI_COLOR_ENABLE
+#define LOG_ANSI_COLOR_ENABLE 1  // Default: 1: Enable color, 0: Disable color
 #endif
 
 #ifdef log_i
@@ -60,7 +60,7 @@ namespace dbg
 	 * @brief Macro to print the debug log header with the specified level name and color.
 	 */
 
-	#if (LOG_COLOR_ENABLE == 1)
+	#if (LOG_ANSI_COLOR_ENABLE == 1)
 		#define _DBG_LOG_HDR(new_line, lvl_name, color_n) \
 			do { \
 				if(new_line) { \
@@ -85,7 +85,7 @@ namespace dbg
 	 * @brief Macro to print the debug log end with a new line.
 	 */
 	
-	#if (LOG_COLOR_ENABLE == 1)
+	#if (LOG_ANSI_COLOR_ENABLE == 1)
 		#define _DBG_LOG_X_END_NEWLINE     		 Serial2.printf("\033[0m\r\n")
 	#else
 		#define _DBG_LOG_X_END_NEWLINE     		 Serial2.printf("\r\n")
@@ -95,7 +95,7 @@ namespace dbg
 	 * @brief Macro to print the debug log end without a new line.
 	 */
 
-	#if (LOG_COLOR_ENABLE == 1)
+	#if (LOG_ANSI_COLOR_ENABLE == 1)
 		#define _DBG_LOG_X_END_NONE      		 Serial2.printf("\033[0m")
 	#else
 		#define _DBG_LOG_X_END_NONE      		 Serial2.printf("")

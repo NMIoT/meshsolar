@@ -39,6 +39,7 @@
 #define MAC_CMD_FET_CONTROL         0x0022
 #define MAC_CMD_DEV_RESET           0x0041
 #define MAC_CMD_SECURITY_KEYS       0x0035
+#define MAC_CMD_DA_STATUS1          0x0071
 #define MAC_CMD_DA_STATUS2          0x0072
 #define DF_CMD_DEVICE_NAME          0x4085
 #define DF_CMD_MANUFACTURER_NAME    0x4070

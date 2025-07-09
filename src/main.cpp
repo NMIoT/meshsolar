@@ -4,10 +4,10 @@
 
 // Define log control macros before including logger.h
 // Log color control: 1: Enable color output, 0: Disable color output
-#define LOG_COLOR_ENABLE 1
+#define LOG_ANSI_COLOR_ENABLE 1
 // Log level control: ERROR(0), WARNING(1), INFO(2), LOG(3), DEBUG(4)
 // Higher values include all lower levels
-#define DBG_LEVEL        3  // LOG level - shows ERROR = 0, WARNING = 1, INFO = 2, LOG = 3, DEBUG = 4
+#define LOG_LEVEL             3  
 
 #include "solar.h"
 #include "SoftwareWire.h"
@@ -21,18 +21,6 @@
 SoftwareWire Wire( g_ADigitalPinMap[SDA_PIN], g_ADigitalPinMap[SCL_PIN]);
 BQ4050       bq4050(false); 
 MeshSolar    meshsolar;   // Create an instance of MeshSolar
-
-
-// {"command":"config","battery":{"type":"liion","cell_number":2,"design_capacity":3001,"cutoff_voltage":2551},"temperature_protection":{"discharge_high_temp_c":61,"discharge_low_temp_c":1,"charge_high_temp_c":41,"charge_low_temp_c":1,"temp_enabled":false}}
-
-// {"command":"advance","battery":{"cuv":2701,"eoc":4201,"eoc_protect":4351},"cedv":{"cedv0":2561,"cedv1":2571,"cedv2":2581,"discharge_cedv0":4151,"discharge_cedv10":4051,"discharge_cedv20":4001,"discharge_cedv30":3901,"discharge_cedv40":3851,"discharge_cedv50":3801,"discharge_cedv60":3651,"discharge_cedv70":3551,"discharge_cedv80":3501,"discharge_cedv90":3301,"discharge_cedv100":2561}}
-
-// {"command":"status","soc_gauge": 50,"charge_current": 500,"total_voltage": 12.5,"learned_capacity": 6.6,"cells": [{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7},{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7}]}
-
-// {"command":"sync","times":3}
-
-// {"command":"reset"}
-
 
 static bool listenString(String& input, char terminator = '\n') {
     while (comSerial.available() > 0) {
@@ -161,6 +149,7 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
 
 
 size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
+    output = "";
     StaticJsonDocument<512> doc;
     doc["command"] = status->command;
     doc["soc_gauge"] = status->soc_gauge;
@@ -182,6 +171,7 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
 
 
 size_t meshsolarBasicConfigToJson(const basic_config_t *basic, String& output) {
+    output = "";
     StaticJsonDocument<512> doc;
     doc["command"] = "config";
     doc["battery"]["type"] = String(basic->type);
@@ -202,6 +192,7 @@ size_t meshsolarBasicConfigToJson(const basic_config_t *basic, String& output) {
 
 
 size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& output) {
+    output = "";
     StaticJsonDocument<512> doc;
     doc["command"] = "advance";
 
@@ -237,6 +228,17 @@ void setup() {
     LOG_I("MeshSolar initialized successfully");
 }
 
+
+
+// {"command":"config","battery":{"type":"liion","cell_number":2,"design_capacity":3001,"cutoff_voltage":2551},"temperature_protection":{"discharge_high_temp_c":61,"discharge_low_temp_c":1,"charge_high_temp_c":41,"charge_low_temp_c":1,"temp_enabled":false}}
+
+// {"command":"advance","battery":{"cuv":2701,"eoc":4201,"eoc_protect":4351},"cedv":{"cedv0":2561,"cedv1":2571,"cedv2":2581,"discharge_cedv0":4151,"discharge_cedv10":4051,"discharge_cedv20":4001,"discharge_cedv30":3901,"discharge_cedv40":3851,"discharge_cedv50":3801,"discharge_cedv60":3651,"discharge_cedv70":3551,"discharge_cedv80":3501,"discharge_cedv90":3301,"discharge_cedv100":2561}}
+
+// {"command":"status","soc_gauge": 50,"charge_current": 500,"total_voltage": 12.5,"learned_capacity": 6.6,"cells": [{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7},{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7}]}
+
+// {"command":"sync","times":3}
+
+// {"command":"reset"}
 
 
 void loop() {
@@ -289,7 +291,6 @@ void loop() {
                 LOG_I("Resetting BQ4050...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
-                json = ""; 
                 size_t len = meshsolarBasicConfigToJson(&meshsolar.sync_rsp.basic, json);
                 if(len > 0) {
                     comSerial.println(json); // Send the configuration back to the serial port
@@ -312,7 +313,37 @@ void loop() {
         }
     }
 
-#if 1
+
+#if 1 // debugging section
+    if(0 == cnt % 1000) {
+        bq4050_block_t block = {0,0,nullptr}; // Initialize block structure
+        // DAStatus1_t da1 = {0,};
+        // block.cmd = MAC_CMD_DA_STATUS1; // Command to read cell voltage
+        // block.len = 32;                 
+
+        // if(bq4050.read_mac_block(&block)){
+        //     memcpy(&da1, block.pvalue, sizeof(DAStatus1_t)); // Copy the data into the da1 structure
+        //     dbg::hex_print((uint8_t*)&da1, sizeof(DAStatus1_t),"DAStatus1");
+        // } 
+        // delay(10); 
+
+
+
+        DAStatus2_t da2 = {0,};
+        block.cmd = MAC_CMD_DA_STATUS2; // Command to read cell voltage
+        block.len = 14;                 
+
+       if(bq4050.read_mac_block(&block)){
+            memcpy(&da2, block.pvalue, sizeof(DAStatus2_t)); // Copy the data into the da1 structure
+            dbg::hex_print((uint8_t*)&da2, sizeof(DAStatus2_t),"DAStatus2");
+        } 
+        delay(10); 
+
+    }
+#endif
+
+
+#if 0
     if(0 == cnt % 1000) {
         meshsolar.get_bat_realtime_status(); // Update the battery status
         meshsolar.get_bat_realtime_basic_config(); // Update the battery configuration
@@ -324,7 +355,6 @@ void loop() {
 #if 1
     if(0 == cnt % 1000){
         strlcpy(meshsolar.sta.command, "status", sizeof(meshsolar.sta.command));
-        String json = "";
         meshsolarStatusToJson(&meshsolar.sta, json);
         comSerial.println(json);
     }

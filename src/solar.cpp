@@ -59,18 +59,18 @@ bool MeshSolar::get_bat_realtime_status(){
     block.pvalue[0] = (block.pvalue[0] > 3) ? 3 : block.pvalue[0];        // Ensure DA value is within valid range (0-3)
     this->sta.cell_count = block.pvalue[0] + 1; // Set cell count based on DA configuration (0-3 corresponds to 1-4 cells)
     /**************************************************** get cell temp ***********************************************/
-    DAStatus2_t temperature = {0,};
+    DAStatus2_t da2 = {0,};
     block.cmd = MAC_CMD_DA_STATUS2; // Command to read cell temperatures
     block.len = 14;                 // 14 bytes for cell temperatures
 
     this->_bq4050->read_mac_block(&block); // Read the data block from the BQ4050
-    memcpy(&temperature, block.pvalue, sizeof(DAStatus2_t)); // Copy the data into the temperature structure
+    memcpy(&da2, block.pvalue, sizeof(DAStatus2_t)); // Copy the data into the da2 structure
     delay(10); 
 
-    this->sta.cells[0].temperature = (this->sta.cell_count >= 1) ? temperature.ts1_temp / 10.0f - 273.15f : 0.0f;// Convert from Kelvin to Celsius
-    this->sta.cells[1].temperature = (this->sta.cell_count >= 2) ? temperature.ts2_temp / 10.0f - 273.15f : 0.0f;
-    this->sta.cells[2].temperature = (this->sta.cell_count >= 3) ? temperature.ts3_temp / 10.0f - 273.15f : 0.0f;
-    this->sta.cells[3].temperature = (this->sta.cell_count >= 4) ? temperature.ts4_temp / 10.0f - 273.15f : 0.0f;
+    this->sta.cells[0].temperature = (this->sta.cell_count >= 1) ? da2.ts1_temp / 10.0f - 273.15f : 0.0f;// Convert from Kelvin to Celsius
+    this->sta.cells[1].temperature = (this->sta.cell_count >= 2) ? da2.ts2_temp / 10.0f - 273.15f : 0.0f;
+    this->sta.cells[2].temperature = (this->sta.cell_count >= 3) ? da2.ts3_temp / 10.0f - 273.15f : 0.0f;
+    this->sta.cells[3].temperature = (this->sta.cell_count >= 4) ? da2.ts4_temp / 10.0f - 273.15f : 0.0f;
 
     /**************************************************** get cell voltage *********************************************/
     for (uint8_t i = 0; i < this->sta.cell_count; i++) {
