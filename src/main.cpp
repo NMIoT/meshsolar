@@ -156,6 +156,8 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     doc["charge_current"] = status->charge_current;
     doc["total_voltage"] = String(status->total_voltage/1000.0f, 3);
     doc["learned_capacity"] = String(status->learned_capacity /1000.0f, 3);
+    doc["charge_voltage"] = String(status->charge_voltage/1000.0f, 3);
+    doc["fet_enable"] = status->fet_enable;
 
     JsonArray cells = doc.createNestedArray("cells");
     for (int i = 0; i < status->cell_count; ++i) {
@@ -221,7 +223,7 @@ size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& outp
 }
 
 void setup() {
-    Serial2.begin(115200);      // For debugging, if needed
+    Serial2.begin(115200);              // For debugging, if needed
     comSerial.begin(115200); 
     bq4050.begin(&Wire, BQ4050ADDR);    // Initialize BQ4050 with SoftwareWire instance
     meshsolar.begin(&bq4050);           // Initialize MeshSolar with bq4050 instance
@@ -234,7 +236,7 @@ void setup() {
 
 // {"command":"advance","battery":{"cuv":2701,"eoc":4201,"eoc_protect":4351},"cedv":{"cedv0":2561,"cedv1":2571,"cedv2":2581,"discharge_cedv0":4151,"discharge_cedv10":4051,"discharge_cedv20":4001,"discharge_cedv30":3901,"discharge_cedv40":3851,"discharge_cedv50":3801,"discharge_cedv60":3651,"discharge_cedv70":3551,"discharge_cedv80":3501,"discharge_cedv90":3301,"discharge_cedv100":2561}}
 
-// {"command":"status","soc_gauge": 50,"charge_current": 500,"total_voltage": 12.5,"learned_capacity": 6.6,"cells": [{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7},{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7}]}
+// {"command":"status","soc_gauge": 50,"charge_voltage": 18000,"charge_current": 500,"total_voltage": 12.5,"learned_capacity": 6.6,"fet_enable": false,"cells": [{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7},{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7}]}
 
 // {"command":"sync","times":3}
 
@@ -247,7 +249,7 @@ void loop() {
     cnt++;
 
     if(listenString(json, '\n')) {
-        LOG_D("%s", json.c_str());
+        LOG_W("%s", json.c_str());
         bool res = parseJsonCommand(json.c_str(), &meshsolar.cmd); // Parse the command from input
         if (res) {
             // printMeshsolarCmd(&g_bat_cmd);
@@ -255,39 +257,39 @@ void loop() {
             if (0 == strcmp(meshsolar.cmd.command, "config")) {
                 bool res = false;
 
-                res = meshsolar.bat_basic_type_setting_update();
-                LOG_I(">>>>>>>>    bat_basic_type_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.update_basic_bat_type_setting();
+                LOG_I(">>>>>>>>    update_basic_bat_type_setting result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_basic_cells_setting_update();
-                LOG_I(">>>>>>>>    bat_basic_cells_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.update_basic_bat_cells_setting();
+                LOG_I(">>>>>>>>    update_basic_bat_cells_setting result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_basic_design_capacity_setting_update();
-                LOG_I(">>>>>>>>    bat_basic_design_capacity_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.update_basic_bat_design_capacity_setting();
+                LOG_I(">>>>>>>>    update_basic_bat_design_capacity_setting result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_basic_discharge_cutoff_voltage_setting_update();
-                LOG_I(">>>>>>>>    bat_basic_discharge_cutoff_voltage_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.update_basic_bat_discharge_cutoff_voltage_setting();
+                LOG_I(">>>>>>>>    update_basic_bat_discharge_cutoff_voltage_setting result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_basic_temp_protection_setting_update();
-                LOG_I(">>>>>>>>    bat_basic_temp_protection_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.update_basic_bat_temp_protection_setting();
+                LOG_I(">>>>>>>>    update_basic_bat_temp_protection_setting result: %s", res ? "Success" : "Failed");
 
 
             }
             else if (0 == strcmp(meshsolar.cmd.command, "advance")) {
                 bool res = false;
-                res = meshsolar.bat_advance_battery_config_update();
-                LOG_I(">>>>>>>>    bat_advance_battery_config_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.update_advance_bat_battery_setting();
+                LOG_I(">>>>>>>>    update_advance_bat_battery_setting result: %s", res ? "Success" : "Failed");
 
-                res = meshsolar.bat_advance_cedv_setting_update();
-                LOG_I(">>>>>>>>    bat_advance_cedv_setting_update result: %s", res ? "Success" : "Failed");
+                res = meshsolar.update_advance_bat_cedv_setting();
+                LOG_I(">>>>>>>>    update_advance_bat_cedv_setting result: %s", res ? "Success" : "Failed");
 
 
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {
-                meshsolar.bat_fet_toggle(); 
+                meshsolar.toggle_fet(); 
                 LOG_I("FET Toggle...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "reset")) {
-                meshsolar.bat_reset();      
+                meshsolar.reset_bat_gauge();      
                 LOG_I("Resetting BQ4050...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
@@ -345,9 +347,16 @@ void loop() {
 
 #if 1
     if(0 == cnt % 1000) {
-        meshsolar.get_bat_realtime_status(); // Update the battery status
-        meshsolar.get_bat_realtime_basic_config(); // Update the battery configuration
-        meshsolar.get_bat_realtime_advance_config(); // Update the battery advanced configuration
+        meshsolar.get_realtime_bat_status(); // Update the battery status
+        meshsolar.get_basic_bat_realtime_setting(); // Update the battery configuration
+        meshsolar.get_advance_bat_realtime_setting(); // Update the battery advanced configuration
+        LOG_W("================================================");
+        LOG_W("Status soc_gauge: %d%%", meshsolar.sta.soc_gauge);
+        LOG_W("Status charge_voltage: %d mV", meshsolar.sta.charge_voltage);
+        LOG_W("Status charge_current: %d mA", meshsolar.sta.charge_current);
+        LOG_W("Status total_voltage: %.1f mV", meshsolar.sta.total_voltage);
+        LOG_W("Status learned_capacity: %.1f mAh", meshsolar.sta.learned_capacity);
+        LOG_W("Status bat pack: %s", meshsolar.sta.fet_enable ? "On" : "Off");
     }
 #endif
 

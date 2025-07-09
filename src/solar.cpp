@@ -30,23 +30,23 @@ void MeshSolar::begin(BQ4050 *device) {
     this->_bq4050 = device;
 }
 
-bool MeshSolar::get_bat_realtime_status(){
-    bool res = false;
+bool MeshSolar::get_realtime_bat_status(){
+    bool res = true;
     bq4050_reg_t reg = {0,0};             // Initialize register structure
     bq4050_block_t block = {0,0,nullptr}; // Initialize block structure
     /********************************************** get pack total voltage *********************************************/
     reg.addr = BQ4050_REG_VOLT; // Register address for total voltage
-    res = this->_bq4050->read_reg_word(&reg);
+    res &= this->_bq4050->read_reg_word(&reg);
     this->sta.total_voltage  = (res) ? reg.value : this->sta.total_voltage; // Convert from mV to V
     delay(10); 
     /************************************************ get charge current ***********************************************/
     reg.addr = BQ4050_REG_CURRENT; // Register address for charge current
-    res = (int16_t)this->_bq4050->read_reg_word(&reg);
+    res &= (int16_t)this->_bq4050->read_reg_word(&reg);
     this->sta.charge_current = (res) ? reg.value : this->sta.charge_current; // Convert from mA to A
     delay(10); 
     /*************************************************** get soc gauge ************************************************/
     reg.addr = BQ4050_REG_RSOC; // Register address for state of charge
-    res = this->_bq4050->read_reg_word(&reg); 
+    res &= this->_bq4050->read_reg_word(&reg); 
     this->sta.soc_gauge = (res) ? reg.value : this->sta.soc_gauge; // Read state of charge
     delay(10); 
     /*************************************************** get bat cells ************************************************/
@@ -78,13 +78,6 @@ bool MeshSolar::get_bat_realtime_status(){
     this->_bq4050->read_mac_block(&block); // Read the data block from the BQ4050
     memcpy(&da1, block.pvalue, sizeof(DAStatus1_t)); // Copy the data into the da1 structure
     delay(10); 
-    // LOG_W("cell 1 : %d mV", da1.cell_1_voltage);
-    // LOG_W("cell 2 : %d mV", da1.cell_2_voltage);
-    // LOG_W("cell 3 : %d mV", da1.cell_3_voltage);
-    // LOG_W("cell 4 : %d mV", da1.cell_4_voltage);
-    // LOG_W("bat    : %d mV", da1.bat_voltage);
-    // LOG_W("pack   : %d mV", da1.pack_voltage);
-    // LOG_W("===========================================================");
     this->sta.cells[0].cell_num = 1;
     this->sta.cells[0].voltage = (this->sta.cell_count >= 1) ? da1.cell_1_voltage : 0.0f; 
     this->sta.cells[1].cell_num = 2;
@@ -93,16 +86,25 @@ bool MeshSolar::get_bat_realtime_status(){
     this->sta.cells[2].voltage = (this->sta.cell_count >= 3) ? da1.cell_3_voltage : 0.0f; 
     this->sta.cells[3].cell_num = 4;
     this->sta.cells[3].voltage = (this->sta.cell_count >= 4) ? da1.cell_4_voltage : 0.0f; 
+    /**************************************************** get charge voltage ********************************************/
+    this->sta.charge_voltage = da1.pack_voltage; // Use pack voltage as charge voltage
     /**************************************************** get learned capacity ********************************************/
     reg.addr = BQ4050_REG_FCC; 
-    res  = this->_bq4050->read_reg_word(&reg);
+    res  &= this->_bq4050->read_reg_word(&reg);
     this->sta.learned_capacity = (res) ? reg.value : this->sta.learned_capacity; 
-
     delay(10); 
-    return true; // Return true to indicate status update was successful
+    /**************************************************** get fet enable state ********************************************/
+    reg.addr = MAC_CMD_MANUFACTURER_STATUS; // Register address for manufacturer status
+    res &= this->_bq4050->read_reg_word(&reg); 
+    // seems the big endian register format for this register
+    // feten should be bit4 of the register value based on the BQ4050 documentation
+    // but feten is actually bit12 of the register value, so we use bitmask 0x1000 here
+    // TODO 
+    this->sta.fet_enable = (res) ? (reg.value & 0x1000) != 0 : this->sta.fet_enable; 
+    return res; // Return true to indicate status update was successful
 }
 
-bool MeshSolar::get_bat_realtime_basic_config(){
+bool MeshSolar::get_basic_bat_realtime_setting(){
     bq4050_block_t block= {
         .cmd = DF_CMD_SBS_DATA_CHEMISTRY,
         .len = 5,
@@ -209,15 +211,15 @@ bool MeshSolar::get_bat_realtime_basic_config(){
     return true; // Return false to indicate configuration update was successful
 }
 
-bool MeshSolar::get_bat_realtime_advance_config(){
+bool MeshSolar::get_advance_bat_realtime_setting(){
     bq4050_block_t block = {0, 0, nullptr, NUMBER};
     
     /*
      * Read advanced battery configuration from BQ4050
      * 
      * This function reads the advanced configuration parameters that correspond
-     * to the settings configured in bat_advance_battery_config_update() and
-     * bat_advance_cedv_setting_update() functions.
+     * to the settings configured in update_advance_bat_battery_setting() and
+     * update_advance_bat_cedv_setting() functions.
      */
     
     /*****************************************  CUV (Cell Under Voltage) Protection  *************************************/
@@ -332,7 +334,7 @@ bool MeshSolar::get_bat_realtime_advance_config(){
     return true;
 }
 
-bool MeshSolar::bat_basic_type_setting_update(){ 
+bool MeshSolar::update_basic_bat_type_setting(){ 
     bool res = true;
 
     /*
@@ -521,12 +523,12 @@ bool MeshSolar::bat_basic_type_setting_update(){
     return res;
 }
 
-bool MeshSolar::bat_basic_model_setting_update() {
+bool MeshSolar::update_basic_bat_model_setting() {
 
     return false;
 }
 
-bool MeshSolar::bat_basic_cells_setting_update() {
+bool MeshSolar::update_basic_bat_cells_setting() {
     bool res = true;
 
     // Get cell voltage based on battery type
@@ -605,7 +607,7 @@ bool MeshSolar::bat_basic_cells_setting_update() {
     return res; 
 }
 
-bool MeshSolar::bat_basic_design_capacity_setting_update(){
+bool MeshSolar::update_basic_bat_design_capacity_setting(){
     // Get cell voltage based on battery type
     float cell_voltage = 0.0f;
     bool res = true;
@@ -666,7 +668,7 @@ bool MeshSolar::bat_basic_design_capacity_setting_update(){
     return res;
 }
 
-bool MeshSolar::bat_basic_discharge_cutoff_voltage_setting_update(){
+bool MeshSolar::update_basic_bat_discharge_cutoff_voltage_setting(){
     bool res = true;
     
     /*
@@ -749,7 +751,7 @@ bool MeshSolar::bat_basic_discharge_cutoff_voltage_setting_update(){
     return res;
 }
 
-bool MeshSolar::bat_basic_temp_protection_setting_update() {
+bool MeshSolar::update_basic_bat_temp_protection_setting() {
     bool res = true;
     
     /*
@@ -953,7 +955,7 @@ bool MeshSolar::bat_basic_temp_protection_setting_update() {
     return res;
 }
 
-bool MeshSolar::bat_advance_battery_config_update() {
+bool MeshSolar::update_advance_bat_battery_setting() {
     bool res = true;
     /*
      * Advanced battery configuration for BQ4050
@@ -1037,7 +1039,7 @@ bool MeshSolar::bat_advance_battery_config_update() {
     return res;
 }
 
-bool MeshSolar::bat_advance_cedv_setting_update(){
+bool MeshSolar::update_advance_bat_cedv_setting(){
     bool res = true; // Initialize result variable
 
     /*
@@ -1108,11 +1110,11 @@ bool MeshSolar::bat_advance_cedv_setting_update(){
     return res; // Return the result of all configurations
 }
 
-bool MeshSolar::bat_fet_toggle(){
+bool MeshSolar::toggle_fet(){
     return this->_bq4050->fet_toggle(); // Call the BQ4050 method to toggle FETs
 }
 
 
-bool MeshSolar::bat_reset() {
+bool MeshSolar::reset_bat_gauge() {
     return this->_bq4050->reset(); // Call the BQ4050 method to reset the device
 }

@@ -113,6 +113,9 @@ typedef struct {
     float           learned_capacity;    // Learned capacity (Ah)
     cell_status_t   cells[4];            // Array for cell status (adjust size as needed)
     int             cell_count;          // Number of valid cells in the array
+    bool            fet_enable;          // FET enable status
+    uint16_t        charge_voltage;      // Charge voltage (mV)
+    char            protection_sta[16];  // Command type, e.g. "cuv", "chgv", "dischv", "none"
 } meshsolar_status_t;
 
 
@@ -133,23 +136,23 @@ public:
     void begin(BQ4050 *device);
 
     // Basic configuration functions
-    bool bat_basic_type_setting_update();
-    bool bat_basic_model_setting_update();
-    bool bat_basic_cells_setting_update ();
-    bool bat_basic_design_capacity_setting_update();
-    bool bat_basic_discharge_cutoff_voltage_setting_update();
-    bool bat_basic_temp_protection_setting_update(); // Update temperature protection settings
+    bool update_basic_bat_type_setting();
+    bool update_basic_bat_model_setting();
+    bool update_basic_bat_cells_setting ();
+    bool update_basic_bat_design_capacity_setting();
+    bool update_basic_bat_discharge_cutoff_voltage_setting();
+    bool update_basic_bat_temp_protection_setting(); // Update temperature protection settings
 
     // Advanced configuration functions
-    bool bat_advance_battery_config_update();
-    bool bat_advance_cedv_setting_update();
+    bool update_advance_bat_battery_setting();
+    bool update_advance_bat_cedv_setting();
 
-    bool bat_fet_toggle();
-    bool bat_reset();
+    bool toggle_fet();
+    bool reset_bat_gauge();
 
-    bool get_bat_realtime_status();
-    bool get_bat_realtime_basic_config();
-    bool get_bat_realtime_advance_config();
+    bool get_realtime_bat_status();
+    bool get_basic_bat_realtime_setting();
+    bool get_advance_bat_realtime_setting();
 };
 
 
