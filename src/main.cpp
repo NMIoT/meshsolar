@@ -1,6 +1,14 @@
 #include <Arduino.h>
 #include "Adafruit_TinyUSB.h"
 #include <ArduinoJson.h>
+
+// Define log control macros before including logger.h
+// Log color control: 1: Enable color output, 0: Disable color output
+#define LOG_COLOR_ENABLE 1
+// Log level control: ERROR(0), WARNING(1), INFO(2), LOG(3), DEBUG(4)
+// Higher values include all lower levels
+#define DBG_LEVEL        3  // LOG level - shows ERROR = 0, WARNING = 1, INFO = 2, LOG = 3, DEBUG = 4
+
 #include "solar.h"
 #include "SoftwareWire.h"
 #include "bq4050.h"
@@ -232,14 +240,13 @@ void setup() {
 
 
 void loop() {
-    String input = "";
     static uint32_t cnt = 0; 
+    String json = "";
     cnt++;
 
-    input = ""; // Reset input for new command
-    if(listenString(input, '\n')) {
-        LOG_D("%s", input.c_str());
-        bool res = parseJsonCommand(input.c_str(), &meshsolar.cmd); // Parse the command from input
+    if(listenString(json, '\n')) {
+        LOG_D("%s", json.c_str());
+        bool res = parseJsonCommand(json.c_str(), &meshsolar.cmd); // Parse the command from input
         if (res) {
             // printMeshsolarCmd(&g_bat_cmd);
             /*  add some func call back here base on cmd sector */
@@ -282,14 +289,7 @@ void loop() {
                 LOG_I("Resetting BQ4050...");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
-                static bool first_sync = true;
-                String json = "";
-                if(first_sync) {
-                    meshsolar.get_bat_realtime_basic_config(); // Update the battery configuration
-                    meshsolar.get_bat_realtime_advance_config(); // Update the battery advanced configuration
-                    first_sync = false; // Set to false after the first sync
-                }
-
+                json = ""; 
                 size_t len = meshsolarBasicConfigToJson(&meshsolar.sync_rsp.basic, json);
                 if(len > 0) {
                     comSerial.println(json); // Send the configuration back to the serial port
@@ -312,38 +312,6 @@ void loop() {
         }
     }
 
-
-#if 0
-    if(0 == cnt % 1000) {
-
-        bq4050_block_t block= {
-            .cmd = DF_CMD_SBS_DATA_CHEMISTRY,
-            .len = 5,
-            .pvalue =nullptr,
-            .type = STRING
-        };
-        bq4050.read_dataflash_block(&block); 
-        for(uint8_t i = 0; i < block.len; i++) {
-            dbgSerial.print((char)block.pvalue[i]); // Print as character
-        }
-
-        block.pvalue = (uint8_t *)malloc(block.len); // Allocate memory for the block data
-        if (block.pvalue == nullptr) {
-            dbgSerial.println("Memory allocation failed for block.pvalue");
-            return; // Exit if memory allocation fails
-        }
-
-        memset(block.pvalue, 0, block.len); // Initialize the block data to zero
-        const char *ddd = "lfe4"; // Custom data to write
-        block.pvalue[0] = strlen(ddd); // Set the length of the data
-        memcpy(block.pvalue + 1, ddd, strlen(ddd)); // Copy custom data into the block
-        bq4050.write_dataflash_block(block); // Write back the block to the data flash
-
-
-        dbgSerial.println();
-    }
-#endif
-
 #if 1
     if(0 == cnt % 1000) {
         meshsolar.get_bat_realtime_status(); // Update the battery status
@@ -354,7 +322,7 @@ void loop() {
 
 
 #if 1
-    if(0 == cnt % 1500){
+    if(0 == cnt % 1000){
         strlcpy(meshsolar.sta.command, "status", sizeof(meshsolar.sta.command));
         String json = "";
         meshsolarStatusToJson(&meshsolar.sta, json);

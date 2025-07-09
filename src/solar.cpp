@@ -307,6 +307,7 @@ bool MeshSolar::get_bat_realtime_advance_config(){
         }
         *target = (block.pvalue[1] << 8) | block.pvalue[0];
         LOG_D("%s: %d mV", name, *target);
+        delay(50); // Add a small delay to avoid flooding the bus
         return true;
     };
     
