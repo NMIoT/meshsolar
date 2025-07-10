@@ -34,11 +34,11 @@ bool MeshSolar::get_realtime_bat_status(){
     bool res = true;
     bq4050_reg_t reg = {0,0};             // Initialize register structure
     bq4050_block_t block = {0,0,nullptr}; // Initialize block structure
-    /********************************************** get pack total voltage *********************************************/
-    reg.addr = BQ4050_REG_VOLT; // Register address for total voltage
-    res &= this->_bq4050->read_reg_word(&reg);
-    this->sta.total_voltage  = (res) ? reg.value : this->sta.total_voltage; // Convert from mV to V
-    delay(10); 
+    // /********************************************** get pack total voltage *********************************************/
+    // reg.addr = BQ4050_REG_VOLT; // Register address for total voltage
+    // res &= this->_bq4050->read_reg_word(&reg);
+    // this->sta.total_voltage  = (res) ? reg.value : this->sta.total_voltage; // Convert from mV to V
+    // delay(10); 
     /************************************************ get charge current ***********************************************/
     reg.addr = BQ4050_REG_CURRENT; // Register address for charge current
     res &= (int16_t)this->_bq4050->read_reg_word(&reg);
@@ -79,25 +79,38 @@ bool MeshSolar::get_realtime_bat_status(){
     memcpy(&da1, block.pvalue, sizeof(DAStatus1_t)); // Copy the data into the da1 structure
     delay(10); 
     this->sta.cells[0].cell_num = 1;
-    this->sta.cells[0].voltage = (this->sta.cell_count >= 1) ? da1.cell_1_voltage : 0.0f; 
+    this->sta.cells[0].voltage  = (this->sta.cell_count >= 1) ? da1.cell_1_voltage : 0.0f; 
     this->sta.cells[1].cell_num = 2;
-    this->sta.cells[1].voltage = (this->sta.cell_count >= 2) ? da1.cell_2_voltage : 0.0f; 
+    this->sta.cells[1].voltage  = (this->sta.cell_count >= 2) ? da1.cell_2_voltage : 0.0f; 
     this->sta.cells[2].cell_num = 3;
-    this->sta.cells[2].voltage = (this->sta.cell_count >= 3) ? da1.cell_3_voltage : 0.0f; 
+    this->sta.cells[2].voltage  = (this->sta.cell_count >= 3) ? da1.cell_3_voltage : 0.0f; 
     this->sta.cells[3].cell_num = 4;
-    this->sta.cells[3].voltage = (this->sta.cell_count >= 4) ? da1.cell_4_voltage : 0.0f; 
+    this->sta.cells[3].voltage  = (this->sta.cell_count >= 4) ? da1.cell_4_voltage : 0.0f; 
+    this->sta.total_voltage     = da1.bat_voltage;  // Use pack voltage as total voltage
     /**************************************************** get charge voltage ********************************************/
-    this->sta.charge_voltage = da1.pack_voltage; // Use pack voltage as charge voltage
-    /**************************************************** get learned capacity ********************************************/
+    this->sta.charge_voltage = da1.pack_voltage;    // Use pack voltage as charge voltage
+    /**************************************************** get learned capacity ******************************************/
     reg.addr = BQ4050_REG_FCC; 
     res  &= this->_bq4050->read_reg_word(&reg);
     this->sta.learned_capacity = (res) ? reg.value : this->sta.learned_capacity; 
     delay(10); 
-    /**************************************************** get fet enable state ********************************************/
-    block.cmd = MAC_CMD_MANUFACTURER_STATUS; // Command to read manufacturer status
+    /**************************************************** get fet enable state ******************************************/
+    block.cmd = MAC_CMD_MANUFACTURER_STATUS;        // Command to read manufacturer status
     block.len = 2;                 
     res &= this->_bq4050->read_mac_block(&block); 
     this->sta.fet_enable = (res) ? (*(uint16_t*)block.pvalue & 0x0010) != 0 : this->sta.fet_enable; 
+    /**************************************************** get protection status **************************************/
+    SafetyStatus_t safety_status = {0,};
+    block.cmd = MAC_CMD_SAFETY_STATUS; // Command to read safety status
+    block.len = 4;                     // Length of the data block to read
+    res &= this->_bq4050->read_mac_block(&block); // Read the data block from the BQ4050
+    memcpy(&safety_status, block.pvalue, sizeof(SafetyStatus_t)); // Copy the data into the safety_status structure
+    
+    // Convert 4-byte SafetyStatus to hex string (8 characters + null terminator)
+    // Format as big-endian hex string: MSB first
+    snprintf(this->sta.protection_sta, sizeof(this->sta.protection_sta), 
+             "%08X", (unsigned int)safety_status.bytes);
+             
     return res; // Return true to indicate status update was successful
 }
 

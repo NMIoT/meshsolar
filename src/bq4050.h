@@ -39,6 +39,7 @@
 #define MAC_CMD_FET_CONTROL         0x0022
 #define MAC_CMD_DEV_RESET           0x0041
 #define MAC_CMD_SECURITY_KEYS       0x0035
+#define MAC_CMD_SAFETY_STATUS       0x0051
 #define MAC_CMD_MANUFACTURER_STATUS 0x0057
 #define MAC_CMD_DA_STATUS1          0x0071
 #define MAC_CMD_DA_STATUS2          0x0072
@@ -115,6 +116,77 @@
 #define DF_CMD_ADVANCED_CHARGE_ALG_HIGH_TEMP_CHARG_VOL        0x454c
 #define DF_CMD_ADVANCED_CHARGE_ALG_REC_TEMP_CHARG_VOL         0x4554
 
+typedef struct {
+    union {
+        uint32_t bytes;                    // 32-bit raw data
+        struct {
+            // Bits 0-15 (Low word)
+            uint32_t cuv    : 1;           // bit 0:  Cell Under Voltage
+            uint32_t cov    : 1;           // bit 1:  Cell Over Voltage  
+            uint32_t occ1   : 1;           // bit 2:  Overcurrent During Charge 1
+            uint32_t occ2   : 1;           // bit 3:  Overcurrent During Charge 2
+            uint32_t ocd1   : 1;           // bit 4:  Overcurrent During Discharge 1
+            uint32_t ocd2   : 1;           // bit 5:  Overcurrent During Discharge 2
+            uint32_t aold   : 1;           // bit 6:  Overload During Discharge
+            uint32_t aoldl  : 1;           // bit 7:  Overload During Discharge Latch
+            uint32_t ascc   : 1;           // bit 8:  Short-circuit During Charge
+            uint32_t ascl   : 1;           // bit 9:  Short-circuit During Charge Latch
+            uint32_t ascd   : 1;           // bit 10: Short-circuit During Discharge
+            uint32_t ascdl  : 1;           // bit 11: Short-circuit During Discharge Latch
+            uint32_t otc    : 1;           // bit 12: Overtemperature During Charge
+            uint32_t otd    : 1;           // bit 13: Overtemperature During Discharge
+            uint32_t cuvc   : 1;           // bit 14: Cell Undervoltage Compensated
+            uint32_t        : 1;           // bit 15: Reserved
+            
+            // Bits 16-31 (High word)
+            uint32_t otf    : 1;           // bit 16: Overtemperature FET
+            uint32_t        : 1;           // bit 17: Reserved
+            uint32_t pto    : 1;           // bit 18: Precharge Timeout
+            uint32_t        : 1;           // bit 19: Reserved
+            uint32_t cto    : 1;           // bit 20: Charge Timeout
+            uint32_t        : 1;           // bit 21: Reserved
+            uint32_t oc     : 1;           // bit 22: Overcharge
+            uint32_t chgc   : 1;           // bit 23: Overcharging Current
+            uint32_t chgv   : 1;           // bit 24: Overcharging Voltage
+            uint32_t pchgc  : 1;           // bit 25: Over-Precharge Current
+            uint32_t utc    : 1;           // bit 26: Undertemperature During Charge
+            uint32_t utd    : 1;           // bit 27: Undertemperature During Discharge
+            uint32_t        : 4;           // bit 28-31: Reserved
+        } bits;
+    };
+} SafetyStatus_t;
+
+
+typedef struct {
+    uint16_t cell_1_voltage;  // Cell 1 voltage (mV)
+    uint16_t cell_2_voltage;  // Cell 2 voltage (mV)
+    uint16_t cell_3_voltage;  // Cell 3 voltage (mV)
+    uint16_t cell_4_voltage;  // Cell 4 voltage (mV)
+    uint16_t bat_voltage;     // Battery voltage (mV)
+    uint16_t pack_voltage;    // Pack voltage (mV)
+    uint16_t cell_1_current;  // Cell 1 current (mA)
+    uint16_t cell_2_current;  // Cell 2 current (mA)
+    uint16_t cell_3_current;  // Cell 3 current (mA)
+    uint16_t cell_4_current;  // Cell 4 current (mA)
+    uint16_t cell_1_power;    // Cell 1 power (cW)
+    uint16_t cell_2_power;    // Cell 2 power (cW)
+    uint16_t cell_3_power;    // Cell 3 power (cW)
+    uint16_t cell_4_power;    // Cell 4 power (cW)
+    uint16_t power;           // Total power (cW)
+    uint16_t avg_power;       // Average power (cW)
+} DAStatus1_t;
+
+
+typedef struct {
+    int16_t int_temp;        // Internal temperature (units: 0.1K)
+    int16_t ts1_temp;        // Temperature sensor 1 (units: 0.1K)
+    int16_t ts2_temp;        // Temperature sensor 2 (units: 0.1K)
+    int16_t ts3_temp;        // Temperature sensor 3 (units: 0.1K)
+    int16_t ts4_temp;        // Temperature sensor 4 (units: 0.1K)
+    int16_t cell1_temp;      // Cell 1 temperature (units: 0.1K)
+    int16_t fet_temp;        // FET temperature (units: 0.1K)
+} DAStatus2_t;
+
 
 
 
@@ -141,9 +213,7 @@ private:
     SoftwareWire *wire;
     uint8_t crctable[256];
     bool printResults ; // Set to true to print CRC results to the debug serial
-
     uint8_t devAddr;
-
     void crc8_tab_init();
     uint8_t compute_crc8(uint8_t *bytes, int byteLen);
 
@@ -169,12 +239,9 @@ public:
 
     bool read_reg_word(bq4050_reg_t *reg);
     bool write_reg_word(bq4050_reg_t reg);
-
     bool read_mac_block(bq4050_block_t *block);
-
     bool write_dataflash_block(bq4050_block_t block);
     bool read_dataflash_block (bq4050_block_t *block);
-    
     bool fet_toggle();
     bool reset();
 };

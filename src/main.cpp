@@ -158,6 +158,7 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     doc["learned_capacity"] = String(status->learned_capacity /1000.0f, 3);
     doc["charge_voltage"] = String(status->charge_voltage/1000.0f, 3);
     doc["fet_enable"] = status->fet_enable;
+    doc["protection_sta"] = status->protection_sta;
 
     JsonArray cells = doc.createNestedArray("cells");
     for (int i = 0; i < status->cell_count; ++i) {
@@ -357,6 +358,7 @@ void loop() {
         LOG_W("Status total_voltage: %.1f mV", meshsolar.sta.total_voltage);
         LOG_W("Status learned_capacity: %.1f mAh", meshsolar.sta.learned_capacity);
         LOG_W("Status bat pack: %s", meshsolar.sta.fet_enable ? "On" : "Off");
+        LOG_W("Protect Status: %s", meshsolar.sta.protection_sta);
     }
 #endif
 
@@ -365,6 +367,7 @@ void loop() {
     if(0 == cnt % 1000){
         strlcpy(meshsolar.sta.command, "status", sizeof(meshsolar.sta.command));
         meshsolarStatusToJson(&meshsolar.sta, json);
+        // LOG_I("Status JSON: %s", json.c_str());
         comSerial.println(json);
     }
 #endif
