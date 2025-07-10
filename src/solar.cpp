@@ -94,13 +94,10 @@ bool MeshSolar::get_realtime_bat_status(){
     this->sta.learned_capacity = (res) ? reg.value : this->sta.learned_capacity; 
     delay(10); 
     /**************************************************** get fet enable state ********************************************/
-    reg.addr = MAC_CMD_MANUFACTURER_STATUS; // Register address for manufacturer status
-    res &= this->_bq4050->read_reg_word(&reg); 
-    // seems the big endian register format for this register
-    // feten should be bit4 of the register value based on the BQ4050 documentation
-    // but feten is actually bit12 of the register value, so we use bitmask 0x1000 here
-    // TODO 
-    this->sta.fet_enable = (res) ? (reg.value & 0x1000) != 0 : this->sta.fet_enable; 
+    block.cmd = MAC_CMD_MANUFACTURER_STATUS; // Command to read manufacturer status
+    block.len = 2;                 
+    res &= this->_bq4050->read_mac_block(&block); 
+    this->sta.fet_enable = (res) ? (*(uint16_t*)block.pvalue & 0x0010) != 0 : this->sta.fet_enable; 
     return res; // Return true to indicate status update was successful
 }
 
