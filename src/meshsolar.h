@@ -1,5 +1,5 @@
-#ifndef SOLAR_H
-#define SOLAR_H
+#ifndef __MESHSOLAR_H__
+#define __MESHSOLAR_H__
 
 #include <stdbool.h>
 #include "bq4050.h"
@@ -55,6 +55,16 @@ typedef struct {
 } advance_config_t;
 
 typedef struct {
+    bool enable;            // Enable or disable the FET
+} fet_config_t;
+
+
+typedef struct {
+    uint16_t    times;          // Number of times to sync
+} sync_config_t;
+
+
+typedef struct {
     int   cell_num;         // Cell number
     float temperature;      // Cell temperature
     float voltage;          // Cell voltage
@@ -64,9 +74,10 @@ typedef struct {
 // MeshSolar command structure
 typedef struct {
     char                command[16];  
-    basic_config_t      basic;         
-    advance_config_t    advance;
-    bool                fet_en;                   
+    basic_config_t      basic;         // Basic configuration
+    advance_config_t    advance;       // Advanced configuration
+    fet_config_t        fet_en;        // FET enable configuration
+    sync_config_t       sync;          // Sync configuration               
 } meshsolar_config_t;
 
 typedef struct {
@@ -89,7 +100,7 @@ private:
     BQ4050 *_bq4050;                // Instance of BQ4050 class for battery
 public:
     meshsolar_status_t sta;         // Initialize status structure
-    meshsolar_config_t cmd;         // Basic command structure
+    meshsolar_config_t cmd;         // Basic and advance command structure
     struct {
         basic_config_t basic;         // Basic configuration
         advance_config_t advance;     // Advanced configuration
@@ -121,4 +132,4 @@ public:
 
 
 
-#endif // SOLAR_H
+#endif // __MESHSOLAR_H__

@@ -1,5 +1,5 @@
 #include "bq4050.h"
-#include "solar.h"
+#include "meshsolar.h"
 #include "logger.h"
 
 MeshSolar::MeshSolar(){
@@ -16,7 +16,8 @@ MeshSolar::MeshSolar(){
     this->cmd.basic.protection.discharge_low_temp_c       = -10; // Default discharge low temperature threshold
     this->cmd.basic.protection.enabled                    = true; // Default temperature protection enabled
     strlcpy(this->cmd.command, "config", sizeof(this->cmd.command)); // Default command type
-    this->cmd.fet_en = false; // Default FET switch state
+    this->cmd.fet_en.enable = false; // Default FET enable status
+    this->cmd.sync.times    = 1; // Default sync times
 }
 
 MeshSolar::~MeshSolar(){
@@ -44,11 +45,13 @@ bool MeshSolar::get_realtime_bat_status(){
     res &= (int16_t)this->_bq4050->read_reg_word(&reg);
     this->sta.charge_current = (res) ? reg.value : this->sta.charge_current; // Convert from mA to A
     delay(10); 
+    LOG_L("Charge current: %d mA", this->sta.charge_current); // Log charge current
     /*************************************************** get soc gauge ************************************************/
     reg.addr = BQ4050_REG_RSOC; // Register address for state of charge
     res &= this->_bq4050->read_reg_word(&reg); 
     this->sta.soc_gauge = (res) ? reg.value : this->sta.soc_gauge; // Read state of charge
     delay(10); 
+    LOG_L("State of charge: %d %%", this->sta.soc_gauge); // Log state of charge
     /*************************************************** get bat cells ************************************************/
     block.cmd = DF_CMD_DA_CONFIGURATION; // Command to access DA configuration
     block.len = 1; // Length of the data block to read
@@ -58,6 +61,7 @@ bool MeshSolar::get_realtime_bat_status(){
     block.pvalue[0] = (block.pvalue[0] & 0b00000011);        // Mask to get only the last 2 bits for DA configuration
     block.pvalue[0] = (block.pvalue[0] > 3) ? 3 : block.pvalue[0];        // Ensure DA value is within valid range (0-3)
     this->sta.cell_count = block.pvalue[0] + 1; // Set cell count based on DA configuration (0-3 corresponds to 1-4 cells)
+    LOG_L("Cell count: %d", this->sta.cell_count); // Log cell count
     /**************************************************** get cell temp ***********************************************/
     DAStatus2_t da2 = {0,};
     block.cmd = MAC_CMD_DA_STATUS2; // Command to read cell temperatures
@@ -70,7 +74,9 @@ bool MeshSolar::get_realtime_bat_status(){
     this->sta.cells[1].temperature = (this->sta.cell_count >= 2) ? da2.ts2_temp / 10.0f - 273.15f : 0.0f;
     this->sta.cells[2].temperature = (this->sta.cell_count >= 3) ? da2.ts3_temp / 10.0f - 273.15f : 0.0f;
     this->sta.cells[3].temperature = (this->sta.cell_count >= 4) ? da2.ts4_temp / 10.0f - 273.15f : 0.0f;
-
+    for(int i = 0; i < this->sta.cell_count; i++) {
+        LOG_L("Cell %d temperature: %.2f °C", i + 1, this->sta.cells[i].temperature); // Log cell temperatures
+    }
     /**************************************************** get cell voltage *********************************************/
     DAStatus1_t da1 = {0,};
     block.cmd = MAC_CMD_DA_STATUS1; // Command to read cell temperatures
@@ -87,13 +93,19 @@ bool MeshSolar::get_realtime_bat_status(){
     this->sta.cells[3].cell_num = 4;
     this->sta.cells[3].voltage  = (this->sta.cell_count >= 4) ? da1.cell_4_voltage : 0.0f; 
     this->sta.total_voltage     = da1.bat_voltage;  // Use pack voltage as total voltage
+    for(int i = 0; i < this->sta.cell_count; i++) {
+        LOG_L("Cell %d voltage: %.2f V", this->sta.cells[i].cell_num, this->sta.cells[i].voltage / 1000.0f); // Log cell voltages
+    }
+    LOG_L("Total voltage: %.2f V", this->sta.total_voltage / 1000.0f); // Log total voltage
     /**************************************************** get charge voltage ********************************************/
     this->sta.charge_voltage = da1.pack_voltage;    // Use pack voltage as charge voltage
+    LOG_L("Charge voltage: %d mV", this->sta.charge_voltage); // Log charge voltage
     /**************************************************** get learned capacity ******************************************/
     reg.addr = BQ4050_REG_FCC; 
     res  &= this->_bq4050->read_reg_word(&reg);
     this->sta.learned_capacity = (res) ? reg.value : this->sta.learned_capacity; 
     delay(10); 
+    LOG_L("Learned capacity: %.2f Ah", this->sta.learned_capacity / 1000.0f); // Log learned capacity in Ah
     /**************************************************** get fet enable state ******************************************/
     block.cmd = MAC_CMD_MANUFACTURER_STATUS;        // Command to read manufacturer status
     block.len = 2;                 
@@ -107,10 +119,10 @@ bool MeshSolar::get_realtime_bat_status(){
     memcpy(&safety_status, block.pvalue, sizeof(SafetyStatus_t)); // Copy the data into the safety_status structure
     
     // Convert 4-byte SafetyStatus to hex string (8 characters + null terminator)
-    // Format as big-endian hex string: MSB first
-    snprintf(this->sta.protection_sta, sizeof(this->sta.protection_sta), 
-             "%08X", (unsigned int)safety_status.bytes);
-             
+    // Format as big-endian hex string: MSB first 
+    snprintf(this->sta.protection_sta, sizeof(this->sta.protection_sta), "%08X", (unsigned int)safety_status.bytes);
+    LOG_L("Protection status: %s", this->sta.protection_sta); // Log protection status in hex format
+
     return res; // Return true to indicate status update was successful
 }
 
@@ -124,13 +136,13 @@ bool MeshSolar::get_basic_bat_realtime_setting(){
     /*****************************************   bat type   *************************************/
     memset(this->sync_rsp.basic.type, 0, sizeof(this->sync_rsp.basic.type)); // Clear the battery type string
     this->_bq4050->read_dataflash_block(&block); 
-    if(0 == strcasecmp((const char *)block.pvalue, "lfe4")) {
+    if(0 == strcasecmp((const char *)block.pvalue, "LFE4")) {
         strlcpy(this->sync_rsp.basic.type, "lifepo4", sizeof(this->sync_rsp.basic.type)); // Copy battery type to sync response structure
     }
-    else if(0 == strcasecmp((const char *)block.pvalue, "lion")) {
+    else if(0 == strcasecmp((const char *)block.pvalue, "LION")) {
         strlcpy(this->sync_rsp.basic.type, "liion", sizeof(this->sync_rsp.basic.type)); // Copy battery type to sync response structure
     }
-    else if(0 == strcasecmp((const char *)block.pvalue, "lipo")) {
+    else if(0 == strcasecmp((const char *)block.pvalue, "LIPO")) {
         strlcpy(this->sync_rsp.basic.type, "lipo", sizeof(this->sync_rsp.basic.type)); // Copy battery type to sync response structure
     }
     else {
@@ -253,7 +265,7 @@ bool MeshSolar::get_advance_bat_realtime_setting(){
         return false;
     }
     this->sync_rsp.advance.battery.eoc = (block.pvalue[1] << 8) | block.pvalue[0];
-    LOG_D("EOC voltage: %d mV", this->sync_rsp.advance.battery.eoc);
+    LOG_L("EOC voltage: %d mV", this->sync_rsp.advance.battery.eoc);
     
     /*****************************************  EOC Protection Voltage  *************************************/
     // Read from standard temperature COV threshold (represents EOC protection setting)
@@ -265,7 +277,7 @@ bool MeshSolar::get_advance_bat_realtime_setting(){
         return false;
     }
     this->sync_rsp.advance.battery.eoc_protect = (block.pvalue[1] << 8) | block.pvalue[0];
-    LOG_D("EOC protection voltage: %d mV", this->sync_rsp.advance.battery.eoc_protect);
+    LOG_L("EOC protection voltage: %d mV", this->sync_rsp.advance.battery.eoc_protect);
     
     /*****************************************  CEDV Fixed Values  *************************************/
     // Read CEDV fixed EDV0
@@ -330,7 +342,6 @@ bool MeshSolar::get_advance_bat_realtime_setting(){
             return false;
         }
         *target = (block.pvalue[1] << 8) | block.pvalue[0];
-        LOG_D("%s: %d mV", name, *target);
         delay(50); // Add a small delay to avoid flooding the bus
         return true;
     };
@@ -405,7 +416,7 @@ bool MeshSolar::update_basic_bat_type_setting(){
             .cov_threshold  = {3750, 3750, 3750, 3750},  // Safety margins, esp. at extremes
             .cov_recovery   = {3600, 3600, 3600, 3600}   // Match charge voltages for stability
         };
-        type = "lfe4"; // Set battery type to LiFePO4 , bq4050 uses 4 character to store chemistry name
+        type = "LFE4"; // Set battery type to LiFePO4 , bq4050 uses 4 character to store chemistry name
     }
     else if((0 == strcasecmp(this->cmd.basic.type, "lipo"))) {
         // Li-ion/LiPo (Lithium Cobalt/Polymer) characteristics:
@@ -418,7 +429,7 @@ bool MeshSolar::update_basic_bat_type_setting(){
             .cov_threshold  = {4300, 4300, 4300, 4300},  // Conservative safety margins
             .cov_recovery   = {4100, 4100, 4100, 4100}   // Lower recovery for safety
         };
-        type = "lipo"; // Set battery type to LiPo , bq4050 uses 4 character to store chemistry name
+        type = "LIPO"; // Set battery type to LiPo , bq4050 uses 4 character to store chemistry name
     }
     else if((0 == strcasecmp(this->cmd.basic.type, "liion"))) {
         // Li-ion/LiPo (Lithium Cobalt/Polymer) characteristics:
@@ -431,7 +442,7 @@ bool MeshSolar::update_basic_bat_type_setting(){
             .cov_threshold  = {4300, 4300, 4300, 4300},  // Conservative safety margins
             .cov_recovery   = {4100, 4100, 4100, 4100}   // Lower recovery for safety
         };
-        type = "lion"; // Set battery type to Li-ion , bq4050 uses 4 character to store chemistry name
+        type = "LION"; // Set battery type to Li-ion , bq4050 uses 4 character to store chemistry name
     }
     else {
         // dbgSerial.println("Unknown battery type, exit!!!!!!!");
@@ -453,10 +464,10 @@ bool MeshSolar::update_basic_bat_type_setting(){
         {DF_CMD_PROTECTIONS_COV_REC_TEMP_THR,  config.cov_threshold.rec_temp,             "DF_CMD_PROTECTIONS_COV_REC_TEMP_THR           "},
         
         // Protection COV recovery
-        {DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY,  config.cov_recovery.low_temp,     "DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY  "},
-        {DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY,  config.cov_recovery.std_temp,     "DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY  "},
-        {DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY, config.cov_recovery.high_temp,    "DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY "},
-        {DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY,  config.cov_recovery.rec_temp,     "DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY  "},
+        {DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY,  config.cov_recovery.low_temp,         "DF_CMD_PROTECTIONS_COV_LOW_TEMP_RECOVERY      "},
+        {DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY,  config.cov_recovery.std_temp,         "DF_CMD_PROTECTIONS_COV_STD_TEMP_RECOVERY      "},
+        {DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY, config.cov_recovery.high_temp,        "DF_CMD_PROTECTIONS_COV_HIGH_TEMP_RECOVERY     "},
+        {DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY,  config.cov_recovery.rec_temp,         "DF_CMD_PROTECTIONS_COV_REC_TEMP_RECOVERY      "},
     };
 
 
@@ -480,7 +491,7 @@ bool MeshSolar::update_basic_bat_type_setting(){
 
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
         if(value == read_value) {
-            LOG_W("%s set to: %d mV - OK", name, read_value);
+            LOG_I("%s set to: %d mV - OK", name, read_value);
             return true; // Return true if the value matches
         }
         else{
@@ -523,10 +534,10 @@ bool MeshSolar::update_basic_bat_type_setting(){
     ret.type = block.type; // Set block type to STRING
     this->_bq4050->read_dataflash_block(&ret); // Read the battery type back from data flash
     if(0 == strcasecmp((const char *)(ret.pvalue), type)) {
-        LOG_W("DF_CMD_SBS_DATA_CHEMISTRY after: %s - OK", (const char *)(ret.pvalue)); // Log success
+        LOG_I("DF_CMD_SBS_DATA_CHEMISTRY set to: %s - OK", (const char *)(ret.pvalue)); // Log success
     }
     else {
-        LOG_E("DF_CMD_SBS_DATA_CHEMISTRY after: %s - ERROR", (const char *)(ret.pvalue)); // Log error
+        LOG_E("DF_CMD_SBS_DATA_CHEMISTRY set to: %s - ERROR", (const char *)(ret.pvalue)); // Log error
         res = false; // If the read value does not match, set result to false
     }
 
@@ -586,7 +597,7 @@ bool MeshSolar::update_basic_bat_cells_setting() {
             return false;
         }
 
-        LOG_W("DF_CMD_DA_CONFIGURATION after: 0x%02X", ret.pvalue[0]);
+        LOG_L("DF_CMD_DA_CONFIGURATION after: 0x%02X", ret.pvalue[0]);
         res &= (ret.pvalue[0] == block.pvalue[0]);
     }
 
@@ -610,7 +621,7 @@ bool MeshSolar::update_basic_bat_cells_setting() {
         }
 
         uint16_t read_voltage = ret.pvalue[0] | (ret.pvalue[1] << 8);
-        LOG_W("DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV after: %d mV", read_voltage);
+        LOG_I("DF_CMD_GAS_GAUGE_DESIGN_VOLTAGE_MV after: %d mV", read_voltage);
         res &= (read_voltage == total_voltage);
     }
 
@@ -643,7 +654,7 @@ bool MeshSolar::update_basic_bat_design_capacity_setting(){
         bq4050_block_t ret = {DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH, 2, nullptr, NUMBER};
         this->_bq4050->read_dataflash_block(&ret);
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
-        LOG_W("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH after: %d mAh", read_value);
+        LOG_I("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH after: %d mAh", read_value);
         res &= (capacity == read_value);
     }
 
@@ -657,7 +668,7 @@ bool MeshSolar::update_basic_bat_design_capacity_setting(){
         bq4050_block_t ret = {DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH, 2, nullptr, NUMBER};
         this->_bq4050->read_dataflash_block(&ret);
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
-        LOG_W("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH after: %d cWh", read_value);
+        LOG_I("DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH after: %d cWh", read_value);
         res &= (capacity == read_value);
     }
 
@@ -671,7 +682,7 @@ bool MeshSolar::update_basic_bat_design_capacity_setting(){
         bq4050_block_t ret = {DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY, 2, nullptr, NUMBER};
         this->_bq4050->read_dataflash_block(&ret);
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
-        LOG_W("DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY after: %d mAh", read_value);
+        LOG_I("DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY after: %d mAh", read_value);
         res &= (capacity == read_value);
     }
 
@@ -725,31 +736,30 @@ bool MeshSolar::update_basic_bat_discharge_cutoff_voltage_setting(){
 
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
         if (value == read_value) {
-            LOG_W("%s set to: %d mV - OK", name, read_value); // Log success
+            LOG_I("%s set to: %d mV - OK", name, read_value); // Log success
             return true;
         } else {
             LOG_E("%s set to: %d mV - ERROR (expected %d mV)", name, read_value, value); // Log error
             return false;
         }
     };
-
     cutoff_config_entry_t configurations[] = {
         // Gas Gauging - Final Discharge (FD) thresholds
-        {DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR,   0,    "FD Set Voltage Threshold  "},      // Lowest discharge voltage
-        {DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR, 100,  "FD Clear Voltage Threshold"},    // Recovery voltage (+100mV)
+        {DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR,   0,    "FD Set Voltage Threshold                      "},      // Lowest discharge voltage
+        {DF_CMD_GAS_GAUGE_FD_CLEAR_VOLTAGE_THR, 100,  "FD Clear Voltage Threshold                    "},    // Recovery voltage (+100mV)
         
         // Gas Gauging - Terminate Discharge (TD) thresholds  
-        {DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR,   0,    "TD Set Voltage Threshold  "},      // Same as FD set
-        {DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR, 100,  "TD Clear Voltage Threshold"},    // Recovery voltage (+100mV)
+        {DF_CMD_GAS_GAUGE_TD_SET_VOLTAGE_THR,   0,    "TD Set Voltage Threshold                      "},      // Same as FD set
+        {DF_CMD_GAS_GAUGE_TD_CLEAR_VOLTAGE_THR, 100,  "TD Clear Voltage Threshold                    "},    // Recovery voltage (+100mV)
         
         // Gas Gauging - End Discharge Voltage (EDV) stepped warnings
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0,  0,    "CEDV Fixed EDV0           "},              // First warning level
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1,  20,   "CEDV Fixed EDV1           "},              // Second warning (+20mV)
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2,  30,   "CEDV Fixed EDV2           "},              // Third warning (+30mV)
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0,  0,    "CEDV Fixed EDV0                               "},              // First warning level
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1,  20,   "CEDV Fixed EDV1                               "},              // Second warning (+20mV)
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2,  30,   "CEDV Fixed EDV2                               "},              // Third warning (+30mV)
         
         // Protection - Cell Under Voltage (CUV) hardware protection
-        {DF_CMD_PROTECTIONS_CUV_THR,           -50,   "CUV Protection Threshold  "},      // Hardware cutoff (-50mV for safety margin)
-        {DF_CMD_PROTECTIONS_CUV_RECOVERY,      100,   "CUV Recovery Voltage      "}           // Recovery to re-enable (+100mV)
+        {DF_CMD_PROTECTIONS_CUV_THR,           -50,   "CUV Protection Threshold                      "},      // Hardware cutoff (-50mV for safety margin)
+        {DF_CMD_PROTECTIONS_CUV_RECOVERY,      100,   "CUV Recovery Voltage                          "}           // Recovery to re-enable (+100mV)
     };
 
     // Apply all discharge cutoff configurations
@@ -825,16 +835,16 @@ bool MeshSolar::update_basic_bat_temp_protection_setting() {
 
     config_entry_t configurations[] = {
         // Charge temperature protections
-        {DF_CMD_PROTECTIONS_OTC_THR,      config.otc_threshold, "DF_CMD_PROTECTIONS_OTC_THR     "},
-        {DF_CMD_PROTECTIONS_OTC_RECOVERY, config.otc_recovery,  "DF_CMD_PROTECTIONS_OTC_RECOVERY"},
-        {DF_CMD_PROTECTIONS_UTC_THR,      config.utc_threshold, "DF_CMD_PROTECTIONS_UTC_THR     "},
-        {DF_CMD_PROTECTIONS_UTC_RECOVERY, config.utc_recovery,  "DF_CMD_PROTECTIONS_UTC_RECOVERY"},
+        {DF_CMD_PROTECTIONS_OTC_THR,      config.otc_threshold, "DF_CMD_PROTECTIONS_OTC_THR                    "},
+        {DF_CMD_PROTECTIONS_OTC_RECOVERY, config.otc_recovery,  "DF_CMD_PROTECTIONS_OTC_RECOVERY               "},
+        {DF_CMD_PROTECTIONS_UTC_THR,      config.utc_threshold, "DF_CMD_PROTECTIONS_UTC_THR                    "},
+        {DF_CMD_PROTECTIONS_UTC_RECOVERY, config.utc_recovery,  "DF_CMD_PROTECTIONS_UTC_RECOVERY               "},
         
         // Discharge temperature protections
-        {DF_CMD_PROTECTIONS_OTD_THR,      config.otd_threshold, "DF_CMD_PROTECTIONS_OTD_THR     "},
-        {DF_CMD_PROTECTIONS_OTD_RECOVERY, config.otd_recovery,  "DF_CMD_PROTECTIONS_OTD_RECOVERY"},
-        {DF_CMD_PROTECTIONS_UTD_THR,      config.utd_threshold, "DF_CMD_PROTECTIONS_UTD_THR     "},
-        {DF_CMD_PROTECTIONS_UTD_RECOVERY, config.utd_recovery,  "DF_CMD_PROTECTIONS_UTD_RECOVERY"}
+        {DF_CMD_PROTECTIONS_OTD_THR,      config.otd_threshold, "DF_CMD_PROTECTIONS_OTD_THR                    "},
+        {DF_CMD_PROTECTIONS_OTD_RECOVERY, config.otd_recovery,  "DF_CMD_PROTECTIONS_OTD_RECOVERY               "},
+        {DF_CMD_PROTECTIONS_UTD_THR,      config.utd_threshold, "DF_CMD_PROTECTIONS_UTD_THR                    "},
+        {DF_CMD_PROTECTIONS_UTD_RECOVERY, config.utd_recovery,  "DF_CMD_PROTECTIONS_UTD_RECOVERY               "}
     };
 
     // Helper lambda function to write and verify temperature setting
@@ -858,7 +868,7 @@ bool MeshSolar::update_basic_bat_temp_protection_setting() {
         int16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
         float temp_celsius = read_value / 10.0f;  // Convert from 0.1°C units to °C
         if (value == read_value) {
-            LOG_W("%s set to: %.1f°C - OK", name, temp_celsius); // Log success
+            LOG_I("%s set to: %.1f°C - OK", name, temp_celsius); // Log success
             return true;
         } else {
             float expected_celsius = value / 10.0f;  // Convert expected value to °C
@@ -899,11 +909,11 @@ bool MeshSolar::update_basic_bat_temp_protection_setting() {
         if (this->cmd.basic.protection.enabled) {
             // Enable temperature protection: set specified bits
             register_value |= bit_mask;
-            LOG_W("Temperature protection enabled in %s (%s set)", reg_name, bit_desc);
+            LOG_I("Temperature protection enabled in %s (%s set)", reg_name, bit_desc);
         } else {
             // Disable temperature protection: clear specified bits
             register_value &= ~bit_mask;
-            LOG_W("Temperature protection disabled in %s (%s cleared)", reg_name, bit_desc);
+            LOG_I("Temperature protection disabled in %s (%s cleared)", reg_name, bit_desc);
         }
         
         // Write the modified register value back to the device
@@ -922,19 +932,13 @@ bool MeshSolar::update_basic_bat_temp_protection_setting() {
         }
         
         uint8_t verified_value = verify_block.pvalue[0];
-        // Convert to binary string for logging (since %b is not standard)
-        char binary_str[9];
-        for (int i = 7; i >= 0; i--) {
-            binary_str[7-i] = (verified_value & (1 << i)) ? '1' : '0';
-        }
-        binary_str[8] = '\0';
-        LOG_W("%s register: 0b%s (0x%02X)", reg_name, binary_str, verified_value);
+        LOG_I("%s after: 0x%02X", reg_name, verified_value); // Log the register value
         
         // Check if bits are set correctly
         bool bits_match_expected = ((verified_value & bit_mask) != 0) == this->cmd.basic.protection.enabled;
         
         if (bits_match_expected) {
-            LOG_W("%s temperature protection bits verified - OK", reg_name); // Log success
+            LOG_I("%s temperature protection bits verified - OK", reg_name); // Log success
             return true;
         } else {
             LOG_E("%s temperature protection bits verification failed - ERROR", reg_name); // Log error
@@ -1033,7 +1037,7 @@ bool MeshSolar::update_advance_bat_battery_setting() {
 
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8);
         if (value == read_value) {
-            LOG_W("%s set to: %d mV - OK", name, read_value);
+            LOG_I("%s set to: %d mV - OK", name, read_value);
             return true;
         } else {
             LOG_E("%s set to: %d mV - ERROR (expected %d mV)", name, read_value, value);
@@ -1071,20 +1075,20 @@ bool MeshSolar::update_advance_bat_cedv_setting(){
 
     // Define configurations using advance command parameters
     config_entry_t configurations[] = {
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0,       (uint16_t)this->cmd.advance.cedv.cedv0,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0     "},
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1,       (uint16_t)this->cmd.advance.cedv.cedv1,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1     "},
-        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2,       (uint16_t)this->cmd.advance.cedv.cedv2,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2     "},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0,   (uint16_t)this->cmd.advance.cedv.discharge_cedv0,   "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0 "},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_10,  (uint16_t)this->cmd.advance.cedv.discharge_cedv10,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_10"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_20,  (uint16_t)this->cmd.advance.cedv.discharge_cedv20,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_20"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_30,  (uint16_t)this->cmd.advance.cedv.discharge_cedv30,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_30"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_40,  (uint16_t)this->cmd.advance.cedv.discharge_cedv40,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_40"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_50,  (uint16_t)this->cmd.advance.cedv.discharge_cedv50,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_50"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_60,  (uint16_t)this->cmd.advance.cedv.discharge_cedv60,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_60"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_70,  (uint16_t)this->cmd.advance.cedv.discharge_cedv70,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_70"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_80,  (uint16_t)this->cmd.advance.cedv.discharge_cedv80,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_80"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_90,  (uint16_t)this->cmd.advance.cedv.discharge_cedv90,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_90"},
-        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100, (uint16_t)this->cmd.advance.cedv.discharge_cedv100, "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100"},
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0,       (uint16_t)this->cmd.advance.cedv.cedv0,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0               "},
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1,       (uint16_t)this->cmd.advance.cedv.cedv1,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV1               "},
+        {DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2,       (uint16_t)this->cmd.advance.cedv.cedv2,             "DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV2               "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0,   (uint16_t)this->cmd.advance.cedv.discharge_cedv0,   "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0           "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_10,  (uint16_t)this->cmd.advance.cedv.discharge_cedv10,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_10          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_20,  (uint16_t)this->cmd.advance.cedv.discharge_cedv20,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_20          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_30,  (uint16_t)this->cmd.advance.cedv.discharge_cedv30,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_30          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_40,  (uint16_t)this->cmd.advance.cedv.discharge_cedv40,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_40          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_50,  (uint16_t)this->cmd.advance.cedv.discharge_cedv50,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_50          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_60,  (uint16_t)this->cmd.advance.cedv.discharge_cedv60,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_60          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_70,  (uint16_t)this->cmd.advance.cedv.discharge_cedv70,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_70          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_80,  (uint16_t)this->cmd.advance.cedv.discharge_cedv80,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_80          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_90,  (uint16_t)this->cmd.advance.cedv.discharge_cedv90,  "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_90          "},
+        {DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100, (uint16_t)this->cmd.advance.cedv.discharge_cedv100, "DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_100         "},
     };
 
 
@@ -1106,7 +1110,7 @@ bool MeshSolar::update_advance_bat_cedv_setting(){
         }
         uint16_t read_value = ret.pvalue[0] | (ret.pvalue[1] << 8); // Combine two bytes into a single value
         if (value == read_value) {
-            LOG_W("%s set to: %d mV - OK", name, read_value); // Log success
+            LOG_I("%s set to: %d mV - OK", name, read_value); // Log success
             return true;
         } else {
             LOG_E("%s set to: %d mV - ERROR (expected %d mV)", name, read_value, value); // Log error

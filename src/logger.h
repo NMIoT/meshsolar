@@ -12,6 +12,31 @@
 #include <Arduino.h>
 #include <cstring>
 
+/**
+ * @brief Debug level for error messages.
+ */
+#define ERROR           0
+#define WARNING         1
+#define INFO            2
+#define LOG             3
+#define DEBUG           4
+
+// Define log control macros before including logger.h
+// Log color control: 1: Enable color output, 0: Disable color output
+#define LOG_ANSI_COLOR_ENABLE  1
+// Log level control: ERROR(0), WARNING(1), INFO(2), LOG(3), DEBUG(4)
+// Higher values include all lower levels
+#define DBG_LEVEL             INFO  
+
+/**
+ * @brief Default debug level.
+ * Allow external definition of DBG_LEVEL
+ * If not defined externally, default to LOG level
+ */
+#ifndef DBG_LEVEL
+#define DBG_LEVEL       LOG
+#endif
+
 // Allow external definition of LOG_ANSI_COLOR_ENABLE
 // If not defined externally, default to enabled (1)
 #ifndef LOG_ANSI_COLOR_ENABLE
@@ -128,25 +153,6 @@ namespace dbg
 								} \
 							} \
 							while (0)
-
-	/**
-	 * @brief Debug level for error messages.
-	 */
-	#define ERROR           0
-	#define WARNING         1
-	#define INFO            2
-	#define LOG             3
-	#define DEBUG           4
-	
-	/**
-	 * @brief Default debug level.
-	 * Allow external definition of DBG_LEVEL
-	 * If not defined externally, default to LOG level
-	 */
-	#ifndef DBG_LEVEL
-	#define DBG_LEVEL       LOG
-	#endif
-
 	/**
 	 * @brief Macro to print a debug log line with the specified format and arguments, only if the debug level is set to DBG_LOG or higher.
 	 */
