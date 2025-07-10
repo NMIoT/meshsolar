@@ -164,7 +164,7 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     for (int i = 0; i < status->cell_count; ++i) {
         JsonObject cell = cells.createNestedObject();
         cell["cell_num"] = status->cells[i].cell_num;
-        cell["temperature"] = String(status->cells[i].temperature, 2) + "C";
+        cell["temperature"] = String(status->cells[i].temperature, 2) + "℃";
         cell["voltage"] = String(status->cells[i].voltage/1000.0f, 3) + "V";
     }
 
