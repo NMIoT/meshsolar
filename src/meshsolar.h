@@ -89,7 +89,7 @@ typedef struct {
     cell_status_t   cells[4];            // Array for cell status (adjust size as needed)
     int             cell_count;          // Number of valid cells in the array
     bool            fet_enable;          // FET enable status
-    uint16_t        charge_voltage;      // Charge voltage (mV)
+    uint16_t        pack_voltage;        // pack voltage (mV)
     char            protection_sta[32];  // Command type, e.g. "cuv", "chgv", "dischv", "none"
 } meshsolar_status_t;
 

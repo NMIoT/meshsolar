@@ -23,7 +23,7 @@
 
 // Define log control macros before including logger.h
 // Log color control: 1: Enable color output, 0: Disable color output
-#define LOG_ANSI_COLOR_ENABLE  1
+#define LOG_ANSI_COLOR_ENABLE  0
 // Log level control: ERROR(0), WARNING(1), INFO(2), LOG(3), DEBUG(4)
 // Higher values include all lower levels
 #define DBG_LEVEL             INFO  

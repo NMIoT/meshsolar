@@ -155,21 +155,21 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
 size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     output = "";
     StaticJsonDocument<512> doc;
-    doc["command"] = status->command;
-    doc["soc_gauge"] = status->soc_gauge;
-    doc["charge_current"] = status->charge_current;
-    doc["total_voltage"] = String(status->total_voltage/1000.0f, 3);
+    doc["command"]          = "status";
+    doc["soc_gauge"]        = status->soc_gauge;
+    doc["charge_current"]   = status->charge_current;
+    doc["total_voltage"]    = String(status->total_voltage/1000.0f, 3);
     doc["learned_capacity"] = String(status->learned_capacity /1000.0f, 3);
-    doc["charge_voltage"] = String(status->charge_voltage/1000.0f, 3);
-    doc["fet_enable"] = status->fet_enable;
-    doc["protection_sta"] = status->protection_sta;
+    doc["pack_voltage"]     = String(status->pack_voltage);
+    doc["fet_enable"]       = status->fet_enable;
+    doc["protection_sta"]   = status->protection_sta;
 
     JsonArray cells = doc.createNestedArray("cells");
-    for (int i = 0; i < status->cell_count; ++i) {
-        JsonObject cell = cells.createNestedObject();
-        cell["cell_num"] = status->cells[i].cell_num;
-        cell["temperature"] = String(status->cells[i].temperature, 2) + "℃";
-        cell["voltage"] = String(status->cells[i].voltage/1000.0f, 3) + "V";
+    for (int i = 0; i < 4; ++i) {
+        JsonObject cell     = cells.createNestedObject();
+        cell["cell_num"]    = status->cells[i].cell_num;
+        cell["temperature"] = status->cells[i].temperature;
+        cell["voltage"]     = status->cells[i].voltage/1000.0f;
     }
 
     output = "";
@@ -227,9 +227,20 @@ size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& outp
     return serializeJson(doc, output);
 }
 
+
+size_t meshsolarCmdRspToJson(bool status, String& output) {
+    output = "";
+    StaticJsonDocument<64> doc;
+    doc["command"] = "rsp";
+    doc["status"] = status;
+    output = "";
+    // Serialize the JSON document to the output string
+    return serializeJson(doc, output);
+}
+
 void setup() {
     Serial2.begin(115200);              // For debugging, if needed
-    comSerial.begin(115200); 
+    comSerial.begin(115200);            // Initialize the main serial port for communication
     bq4050.begin(&Wire, BQ4050ADDR);    // Initialize BQ4050 with SoftwareWire instance
     meshsolar.begin(&bq4050);           // Initialize MeshSolar with bq4050 instance
     LOG_I("MeshSolar initialized successfully");
@@ -241,9 +252,11 @@ void setup() {
 
 // {"command":"advance","battery":{"cuv":2701,"eoc":4201,"eoc_protect":4351},"cedv":{"cedv0":2561,"cedv1":2571,"cedv2":2581,"discharge_cedv0":4151,"discharge_cedv10":4051,"discharge_cedv20":4001,"discharge_cedv30":3901,"discharge_cedv40":3851,"discharge_cedv50":3801,"discharge_cedv60":3651,"discharge_cedv70":3551,"discharge_cedv80":3501,"discharge_cedv90":3301,"discharge_cedv100":2561}}
 
-// {"command":"status","soc_gauge": 50,"charge_voltage": 18000,"charge_current": 500,"total_voltage": 12.5,"learned_capacity": 6.6,"fet_enable": false,"cells": [{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7},{ "cell_num": 1, "temperature": 26.5, "voltage": 3.7}]}
+// {"command":"status","soc_gauge":0,"charge_current":0,"total_voltage":"15.688","learned_capacity":"3.237","pack_voltage":"12821","fet_enable":true,"protection_sta":"00000001","cells":[{"cell_num":1,"temperature":-53.44998932,"voltage":3.931000233},{"cell_num":2,"temperature":-53.44998932,"voltage":3.929000139},{"cell_num":3,"temperature":-53.44998932,"voltage":3.934000254}]}
 
 // {"command":"sync","times":3}
+
+// {"command":"rsp","status":true}
 
 // {"command":"reset"}
 
@@ -294,13 +307,25 @@ void loop() {
                         break;
                     }
                 }
-                
                 if (allSuccess) {
                     LOG_I("| Overall Status: Configuration completed successfully |");
                 } else {
                     LOG_I("| Overall Status: Some configurations failed          |");
                 }
                 LOG_I("+------------------------------------------------------+");
+
+                //sync the basic battery configuration immediately
+                meshsolar.get_basic_bat_realtime_setting();     
+                meshsolarBasicConfigToJson(&meshsolar.sync_rsp.basic, json); // Get the basic battery settings
+                comSerial.println(json); // Send the configuration back to the serial port
+                delay(10); // Small delay to avoid flooding the serial output
+                LOG_I("Basic configuration sync completed");
+
+                // Respond with the updated basic configuration
+                meshsolarCmdRspToJson(allSuccess, json); // Create a response JSON
+                comSerial.println(json); // Send the response back to the serial port
+                delay(10); // Small delay to avoid flooding the serial output
+                LOG_I("Basic configuration response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "advance")) {
                 bool results[2] = {false};
@@ -329,13 +354,25 @@ void loop() {
                         break;
                     }
                 }
-                
                 if (allSuccess) {
                     LOG_I("| Overall Status: Configuration completed successfully |");
                 } else {
                     LOG_I("| Overall Status: Some configurations failed          |");
                 }
                 LOG_I("+------------------------------------------------------+");
+
+                //respond with the updated advanced configuration
+                meshsolar.get_advance_bat_realtime_setting();
+                meshsolarAdvanceConfigToJson(&meshsolar.sync_rsp.advance, json); // Get the advanced battery settings
+                comSerial.println(json); // Send the configuration back to the serial port
+                delay(10); // Small delay to avoid flooding the serial output
+                LOG_I("Advanced configuration sync");
+
+                // Respond with the updated basic configuration
+                meshsolarCmdRspToJson(allSuccess, json); // Create a response JSON
+                comSerial.println(json); // Send the response back to the serial port
+                delay(10); // Small delay to avoid flooding the serial output
+                LOG_I("Advance configuration response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {
                 meshsolar.toggle_fet(); 
@@ -407,24 +444,24 @@ void loop() {
         meshsolar.get_realtime_bat_status();            // Update the battery status
         meshsolar.get_basic_bat_realtime_setting();     // Update the battery configuration
         meshsolar.get_advance_bat_realtime_setting();   // Update the battery advanced configuration
-        // LOG_I("================================================");
-        // LOG_I("Status soc_gauge: %d%%", meshsolar.sta.soc_gauge);
-        // LOG_I("Status charge_voltage: %d mV", meshsolar.sta.charge_voltage);
-        // LOG_I("Status charge_current: %d mA", meshsolar.sta.charge_current);
-        // LOG_I("Status total_voltage: %.0f mV", meshsolar.sta.total_voltage);
-        // LOG_I("Status learned_capacity: %.0f mAh", meshsolar.sta.learned_capacity);
-        // LOG_I("Status bat pack: %s", meshsolar.sta.fet_enable ? "On" : "Off");
-        // LOG_I("Protect Status: %s", meshsolar.sta.protection_sta);
+        LOG_I("================================================");
+        LOG_I("Status soc_gauge: %d%%", meshsolar.sta.soc_gauge);
+        LOG_I("Status pack_voltage: %d mV", meshsolar.sta.pack_voltage);
+        LOG_I("Status charge_current: %d mA", meshsolar.sta.charge_current);
+        LOG_I("Status total_voltage: %.0f mV", meshsolar.sta.total_voltage);
+        LOG_I("Status learned_capacity: %.0f mAh", meshsolar.sta.learned_capacity);
+        LOG_I("Status bat pack: %s", meshsolar.sta.fet_enable ? "On" : "Off");
+        LOG_I("Protect Status: %s", meshsolar.sta.protection_sta);
     }
 #endif
 
 
 #if 1
     if(0 == cnt % 1000){
-        strlcpy(meshsolar.sta.command, "status", sizeof(meshsolar.sta.command));
         meshsolarStatusToJson(&meshsolar.sta, json);
-        // LOG_L("Status JSON: %s", json.c_str());
+        LOG_L("Status JSON: %s", json.c_str());
         comSerial.println(json);
+        delay(10); // Small delay to avoid flooding the serial output
     }
 #endif
 

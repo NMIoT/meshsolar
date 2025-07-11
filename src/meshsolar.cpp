@@ -70,10 +70,10 @@ bool MeshSolar::get_realtime_bat_status(){
     memcpy(&da2, block.pvalue, sizeof(DAStatus2_t)); // Copy the data into the da2 structure
     delay(10); 
 
-    this->sta.cells[0].temperature = (this->sta.cell_count >= 1) ? da2.ts1_temp / 10.0f - 273.15f : 0.0f;// Convert from Kelvin to Celsius
-    this->sta.cells[1].temperature = (this->sta.cell_count >= 2) ? da2.ts2_temp / 10.0f - 273.15f : 0.0f;
-    this->sta.cells[2].temperature = (this->sta.cell_count >= 3) ? da2.ts3_temp / 10.0f - 273.15f : 0.0f;
-    this->sta.cells[3].temperature = (this->sta.cell_count >= 4) ? da2.ts4_temp / 10.0f - 273.15f : 0.0f;
+    this->sta.cells[0].temperature =  da2.ts1_temp / 10.0f - 273.15f;// Convert from Kelvin to Celsius
+    this->sta.cells[1].temperature =  da2.ts2_temp / 10.0f - 273.15f;
+    this->sta.cells[2].temperature =  da2.ts3_temp / 10.0f - 273.15f;
+    this->sta.cells[3].temperature =  da2.ts4_temp / 10.0f - 273.15f;
     for(int i = 0; i < this->sta.cell_count; i++) {
         LOG_L("Cell %d temperature: %.2f °C", i + 1, this->sta.cells[i].temperature); // Log cell temperatures
     }
@@ -85,22 +85,22 @@ bool MeshSolar::get_realtime_bat_status(){
     memcpy(&da1, block.pvalue, sizeof(DAStatus1_t)); // Copy the data into the da1 structure
     delay(10); 
     this->sta.cells[0].cell_num = 1;
-    this->sta.cells[0].voltage  = (this->sta.cell_count >= 1) ? da1.cell_1_voltage : 0.0f; 
+    this->sta.cells[0].voltage  = da1.cell_1_voltage; 
     this->sta.cells[1].cell_num = 2;
-    this->sta.cells[1].voltage  = (this->sta.cell_count >= 2) ? da1.cell_2_voltage : 0.0f; 
+    this->sta.cells[1].voltage  = da1.cell_2_voltage; 
     this->sta.cells[2].cell_num = 3;
-    this->sta.cells[2].voltage  = (this->sta.cell_count >= 3) ? da1.cell_3_voltage : 0.0f; 
+    this->sta.cells[2].voltage  = da1.cell_3_voltage; 
     this->sta.cells[3].cell_num = 4;
-    this->sta.cells[3].voltage  = (this->sta.cell_count >= 4) ? da1.cell_4_voltage : 0.0f; 
-    this->sta.total_voltage     = da1.bat_voltage;  // Use pack voltage as total voltage
-    for(int i = 0; i < this->sta.cell_count; i++) {
+    this->sta.cells[3].voltage  = da1.cell_4_voltage; 
+    this->sta.total_voltage = da1.bat_voltage; // Use bat pin voltage as total voltage
+    for(int i = 0; i < 4 ; i++) {
         LOG_L("Cell %d voltage: %.2f V", this->sta.cells[i].cell_num, this->sta.cells[i].voltage / 1000.0f); // Log cell voltages
     }
     LOG_L("Total voltage: %.2f V", this->sta.total_voltage / 1000.0f); // Log total voltage
     /**************************************************** get charge voltage ********************************************/
-    this->sta.charge_voltage = da1.pack_voltage;    // Use pack voltage as charge voltage
+    this->sta.pack_voltage = da1.pack_voltage;    // Use pack voltage as charge voltage
     LOG_L("Charge voltage: %d mV", this->sta.charge_voltage); // Log charge voltage
-    /**************************************************** get learned capacity ******************************************/
+    /**************************************************** get full charge capacity **************************************/
     reg.addr = BQ4050_REG_FCC; 
     res  &= this->_bq4050->read_reg_word(&reg);
     this->sta.learned_capacity = (res) ? reg.value : this->sta.learned_capacity; 
