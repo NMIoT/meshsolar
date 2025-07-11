@@ -91,6 +91,7 @@ typedef struct {
     bool            fet_enable;          // FET enable status
     uint16_t        pack_voltage;        // pack voltage (mV)
     char            protection_sta[32];  // Command type, e.g. "cuv", "chgv", "dischv", "none"
+    bool            emergency_shutdown;  // Emergency shutdown status
 } meshsolar_status_t;
 
 

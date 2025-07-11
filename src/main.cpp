@@ -168,10 +168,9 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     for (int i = 0; i < 4; ++i) {
         JsonObject cell     = cells.createNestedObject();
         cell["cell_num"]    = status->cells[i].cell_num;
-        cell["temperature"] = status->cells[i].temperature;
-        cell["voltage"]     = status->cells[i].voltage/1000.0f;
+        cell["temperature"] = round(status->cells[i].temperature * 1000)/1000.0f; // Round to 3 decimal places
+        cell["voltage"]     = round((status->cells[i].voltage / 1000.0f) * 1000) / 1000.0f; // Round to 3 decimal places
     }
-
     output = "";
     return serializeJson(doc, output);
 }
@@ -445,13 +444,14 @@ void loop() {
         meshsolar.get_basic_bat_realtime_setting();     // Update the battery configuration
         meshsolar.get_advance_bat_realtime_setting();   // Update the battery advanced configuration
         LOG_I("================================================");
-        LOG_I("Status soc_gauge: %d%%", meshsolar.sta.soc_gauge);
-        LOG_I("Status pack_voltage: %d mV", meshsolar.sta.pack_voltage);
-        LOG_I("Status charge_current: %d mA", meshsolar.sta.charge_current);
-        LOG_I("Status total_voltage: %.0f mV", meshsolar.sta.total_voltage);
+        LOG_I("Status soc_gauge       : %d%%", meshsolar.sta.soc_gauge);
+        LOG_I("Status pack_voltage    : %d mV", meshsolar.sta.pack_voltage);
+        LOG_I("Status charge_current  : %d mA", meshsolar.sta.charge_current);
+        LOG_I("Status total_voltage   : %.0f mV", meshsolar.sta.total_voltage);
         LOG_I("Status learned_capacity: %.0f mAh", meshsolar.sta.learned_capacity);
-        LOG_I("Status bat pack: %s", meshsolar.sta.fet_enable ? "On" : "Off");
-        LOG_I("Protect Status: %s", meshsolar.sta.protection_sta);
+        LOG_I("Status fet enable      : %s", meshsolar.sta.fet_enable ? "On" : "Off");
+        LOG_I("Protect Status         : %s", meshsolar.sta.protection_sta);
+        LOG_I("Emergency Shutdown     : %s", meshsolar.sta.emergency_shutdown ? "Enabled" : "Disabled");
     }
 #endif
 

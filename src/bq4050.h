@@ -40,6 +40,7 @@
 #define MAC_CMD_DEV_RESET           0x0041
 #define MAC_CMD_SECURITY_KEYS       0x0035
 #define MAC_CMD_SAFETY_STATUS       0x0051
+#define MAC_CMD_OPERATION_STATUS    0x0054
 #define MAC_CMD_MANUFACTURER_STATUS 0x0057
 #define MAC_CMD_DA_STATUS1          0x0071
 #define MAC_CMD_DA_STATUS2          0x0072
@@ -156,6 +157,47 @@ typedef struct {
     };
 } SafetyStatus_t;
 
+typedef struct {
+    union {
+        uint32_t bytes;                    // 32-bit raw data
+        struct {
+            // Bits 0-15 (Low word)
+            uint32_t pres       : 1;       // bit 0: System present low
+            uint32_t dsg        : 1;       // bit 1: DSG FET status
+            uint32_t chg        : 1;       // bit 2: CHG FET status
+            uint32_t pchg       : 1;       // bit 3: Precharge FET status
+            uint32_t            : 1;       // bit 4: Reserved
+            uint32_t fuse       : 1;       // bit 5: Fuse status
+            uint32_t smooth     : 1;       // bit 6: Smoothing active status
+            uint32_t btp_int    : 1;       // bit 7: Battery Trip Point Interrupt
+            uint32_t sec0       : 1;       // bit 8: SECURITY mode bit 0
+            uint32_t sec1       : 1;       // bit 9: SECURITY mode bit 1
+            uint32_t sdv        : 1;       // bit 10: Shutdown triggered via low pack voltage
+            uint32_t ss         : 1;       // bit 11: SAFETY mode status
+            uint32_t pf         : 1;       // bit 12: PERMANENT FAILURE mode status
+            uint32_t xdsg       : 1;       // bit 13: Discharging disabled
+            uint32_t xchg       : 1;       // bit 14: Charging disabled
+            uint32_t sleep      : 1;       // bit 15: SLEEP mode conditions met
+            
+            // Bits 16-31 (High word)
+            uint32_t sdm        : 1;       // bit 16: Shutdown triggered via command
+            uint32_t led        : 1;       // bit 17: LED Display
+            uint32_t auth       : 1;       // bit 18: Authentication in progress
+            uint32_t autocalm   : 1;       // bit 19: Auto CC Offset Calibration
+            uint32_t cal        : 1;       // bit 20: Calibration Output (raw ADC and CC data)
+            uint32_t cal_offset : 1;       // bit 21: Calibration Output (raw CC offset data)
+            uint32_t xl         : 1;       // bit 22: 400-kHz SMBus mode
+            uint32_t sleepm     : 1;       // bit 23: SLEEP mode triggered via command
+            uint32_t init       : 1;       // bit 24: Initialization after full reset
+            uint32_t smblcal    : 1;       // bit 25: Auto CC calibration when bus is low
+            uint32_t slpad      : 1;       // bit 26: ADC Measurement in SLEEP mode
+            uint32_t slpcc      : 1;       // bit 27: CC Measurement in SLEEP mode
+            uint32_t cb         : 1;       // bit 28: Cell balancing status
+            uint32_t emshut     : 1;       // bit 29: Emergency Shutdown
+            uint32_t            : 2;       // bit 30-31: Reserved
+        } bits;
+    };
+} OperationStatus_t;
 
 typedef struct {
     uint16_t cell_1_voltage;  // Cell 1 voltage (mV)
@@ -175,7 +217,6 @@ typedef struct {
     uint16_t power;           // Total power (cW)
     uint16_t avg_power;       // Average power (cW)
 } DAStatus1_t;
-
 
 typedef struct {
     int16_t int_temp;        // Internal temperature (units: 0.1K)

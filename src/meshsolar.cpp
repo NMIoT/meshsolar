@@ -117,11 +117,18 @@ bool MeshSolar::get_realtime_bat_status(){
     block.len = 4;                     // Length of the data block to read
     res &= this->_bq4050->read_mac_block(&block); // Read the data block from the BQ4050
     memcpy(&safety_status, block.pvalue, sizeof(SafetyStatus_t)); // Copy the data into the safety_status structure
-    
     // Convert 4-byte SafetyStatus to hex string (8 characters + null terminator)
     // Format as big-endian hex string: MSB first 
     snprintf(this->sta.protection_sta, sizeof(this->sta.protection_sta), "%08X", (unsigned int)safety_status.bytes);
     LOG_L("Protection status: %s", this->sta.protection_sta); // Log protection status in hex format
+    /**************************************************** get operation status **************************************/
+    OperationStatus_t operation_status = {0,};
+    block.cmd = MAC_CMD_OPERATION_STATUS;   // Command to read operation status
+    block.len = 4;                          // Length of the data block to read
+    res &= this->_bq4050->read_mac_block(&block); // Read the data block from the BQ4050
+    memcpy(&operation_status, block.pvalue, sizeof(OperationStatus_t)); // Copy the data into the operation_status structure
+    this->sta.emergency_shutdown = operation_status.bits.emshut; // Get emergency shutdown status
+
 
     return res; // Return true to indicate status update was successful
 }
