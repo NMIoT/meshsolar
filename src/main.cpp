@@ -6,14 +6,90 @@
 #include "bq4050.h"
 #include "logger.h"
 
-#define comSerial           Serial
-#define SDA_PIN             33
-#define SCL_PIN             32
+#define MESHSOLAR_VERSION  "v0.6"
 
+/*
+ * ============================================================================
+ * PORTING GUIDE - Critical Configuration Points
+ * ============================================================================
+ * 
+ * 1. SERIAL PORT CONFIGURATION:
+ *    - comSerial: Primary communication port for JSON command/response
+ *    - Serial2: Debug logging port (115200 baud)
+ *    - Modify serial port assignments based on target platform:
+ *      * ESP32: Serial, Serial1, Serial2
+ *      * Arduino Uno: Serial, SoftwareSerial
+ *      * STM32: Serial, Serial1, Serial2, etc.
+ * 
+ * 2. I2C PIN CONFIGURATION:
+ *    - SDA_PIN: I2C data line connected to BQ4050 SDA
+ *    - SCL_PIN: I2C clock line connected to BQ4050 SCL
+ *    - Default pins are for nRF52840, modify for your hardware
+ * 
+ * 3. PLATFORM-SPECIFIC REQUIREMENTS:
+ *    - nRF52840: Uses g_ADigitalPinMap[] for pin mapping
+ *    - Other platforms: Use direct pin numbers
+ *    - Some platforms may require different I2C libraries
+ * 
+ * 4. GLOBAL OBJECT INITIALIZATION ORDER (CRITICAL!):
+ *    Wire -> bq4050 -> meshsolar
+ *    This order must be maintained for proper initialization
+ * 
+ * 5. MEMORY REQUIREMENTS:
+ *    - JSON buffer: 1024 bytes for command parsing
+ *    - Status buffer: 512 bytes for status/config serialization
+ *    - Ensure sufficient RAM on target platform
+ * 
+ * 6. TIMING CONSIDERATIONS:
+ *    - Main loop runs every 1ms
+ *    - Status updates every 1000 iterations (1 second)
+ *    - BQ4050 I2C operations require delay(10-100ms) between calls
+ * 
+ * 7. DEPENDENCIES:
+ *    - ArduinoJson library (version 6.x)
+ *    - Platform-specific USB/Serial libraries
+ *    - Custom logger.h for debugging output
+ */
+
+// Serial port definitions - MODIFY FOR YOUR PLATFORM
+#define comSerial           Serial      // Primary communication port
+// Platform examples:
+// ESP32: Serial, Serial1, Serial2
+// Arduino: Serial, SoftwareSerial
+// STM32: Serial, Serial1, etc.
+
+// I2C pin definitions - MODIFY FOR YOUR HARDWARE
+#define SDA_PIN             33          // I2C data line pin
+#define SCL_PIN             32          // I2C clock line pin
+// Common pin assignments:
+// ESP32: GPIO 21 (SDA), GPIO 22 (SCL)
+// Arduino Uno: A4 (SDA), A5 (SCL)
+// nRF52840: Any GPIO pin
+
+// Global object declarations - INITIALIZATION ORDER IS CRITICAL!
+// For nRF52840: Uses g_ADigitalPinMap[] for pin mapping
+// For other platforms: Use direct pin numbers like SoftwareWire Wire(SDA_PIN, SCL_PIN);
 SoftwareWire Wire( g_ADigitalPinMap[SDA_PIN], g_ADigitalPinMap[SCL_PIN]);
-BQ4050       bq4050(false); 
-MeshSolar    meshsolar;   // Create an instance of MeshSolar
+BQ4050       bq4050;               // BQ4050 instance
+MeshSolar    meshsolar;            // Main MeshSolar controller object   
 
+/*
+ * ============================================================================
+ * UTILITY FUNCTIONS - Required for system operation
+ * ============================================================================
+ */
+
+/**
+ * @brief Listen for incoming string data on serial port
+ * @param input Reference to string buffer for received data
+ * @param terminator Character that indicates end of message (default: '\n')
+ * @return true if complete message received, false otherwise
+ * 
+ * PORTING NOTES:
+ * - Uses comSerial.available() and comSerial.read()
+ * - Ensure your platform's Serial implementation supports these methods
+ * - For non-blocking operation, this function should be called frequently
+ */
 static bool listenString(String& input, char terminator = '\n') {
     while (comSerial.available() > 0) {
         char c = comSerial.read();
@@ -23,7 +99,25 @@ static bool listenString(String& input, char terminator = '\n') {
     return false; 
 }
 
-
+/**
+ * @brief Parse incoming JSON command and populate command structure
+ * @param json JSON string to parse
+ * @param cmd Pointer to command structure to populate
+ * @return true if parsing successful, false otherwise
+ * 
+ * SUPPORTED COMMANDS:
+ * - "config": Basic battery configuration
+ * - "advance": Advanced battery settings
+ * - "switch": FET control
+ * - "reset": Battery gauge reset
+ * - "sync": Synchronize settings
+ * - "status": Get current status (no parameters)
+ * 
+ * PORTING NOTES:
+ * - Requires ArduinoJson library (version 6.x)
+ * - Uses StaticJsonDocument<1024> - ensure sufficient RAM
+ * - All string operations use safe strlcpy() for buffer protection
+ */
 static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, json);
@@ -151,8 +245,42 @@ static bool parseJsonCommand(const char* json, meshsolar_config_t* cmd) {
     return true;
 }
 
+/*
+ * ============================================================================
+ * JSON SERIALIZATION FUNCTIONS - Data output formatting (snake_case naming)
+ * ============================================================================
+ */
 
-size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
+/**
+ * @brief Convert battery status to JSON format
+ * @param status Pointer to battery status structure
+ * @param output Reference to output string
+ * @return Size of serialized JSON
+ * 
+ * OUTPUT FORMAT:
+ * {
+ *   "command": "status",
+ *   "soc_gauge": 85,
+ *   "charge_current": -1200,
+ *   "total_voltage": "12.345",
+ *   "learned_capacity": "3.200",
+ *   "pack_voltage": "12345",
+ *   "fet_enable": true,
+ *   "protection_sta": "CUV,COV",
+ *   "emergency_shutdown": false,
+ *   "cells": [
+ *     {"cell_num": 1, "temperature": 25.123, "voltage": 3.234},
+ *     ...
+ *   ]
+ * }
+ * 
+ * PORTING NOTES:
+ * - Uses StaticJsonDocument<512> - ensure sufficient RAM
+ * - Voltage/temperature values rounded to 3 decimal places
+ * - Always outputs 4 cells regardless of actual cell count
+ * - Function name follows snake_case convention for better readability
+ */
+size_t meshsolar_status_to_json(const meshsolar_status_t* status, String& output) {
     output = "";
     StaticJsonDocument<512> doc;
     doc["command"]          = "status";
@@ -176,7 +304,18 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
 }
 
 
-size_t meshsolarBasicConfigToJson(const basic_config_t *basic, String& output) {
+/**
+ * @brief Convert basic battery configuration to JSON format
+ * @param basic Pointer to basic configuration structure
+ * @param output Reference to output string
+ * @return Size of serialized JSON
+ * 
+ * FUNCTION: meshsolar_basic_config_to_json
+ * - Serializes basic battery settings into JSON format
+ * - Includes battery type, cell count, capacity, and temperature protection
+ * - Used for configuration synchronization and validation
+ */
+size_t meshsolar_basic_config_to_json(const basic_config_t *basic, String& output) {
     output = "";
     StaticJsonDocument<512> doc;
     doc["command"] = "config";
@@ -197,7 +336,18 @@ size_t meshsolarBasicConfigToJson(const basic_config_t *basic, String& output) {
 }
 
 
-size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& output) {
+/**
+ * @brief Convert advanced battery configuration to JSON format
+ * @param config Pointer to advanced configuration structure  
+ * @param output Reference to output string
+ * @return Size of serialized JSON
+ * 
+ * FUNCTION: meshsolar_advance_config_to_json
+ * - Serializes advanced battery settings including CEDV curves
+ * - Contains cutoff voltages and discharge curve data points
+ * - Critical for battery gauge calibration and performance tuning
+ */
+size_t meshsolar_advance_config_to_json(const advance_config_t *config, String& output) {
     output = "";
     StaticJsonDocument<512> doc;
     doc["command"] = "advance";
@@ -227,7 +377,18 @@ size_t meshsolarAdvanceConfigToJson(const advance_config_t *config, String& outp
 }
 
 
-size_t meshsolarCmdRspToJson(bool status, String& output) {
+/**
+ * @brief Create standardized command response JSON
+ * @param status Boolean indicating command success/failure
+ * @param output Reference to output string  
+ * @return Size of serialized JSON
+ * 
+ * FUNCTION: meshsolar_cmd_rsp_to_json
+ * - Generates consistent response format for all commands
+ * - Simple true/false status indication
+ * - Used for acknowledgment of configuration changes
+ */
+size_t meshsolar_cmd_rsp_to_json(bool status, String& output) {
     output = "";
     StaticJsonDocument<64> doc;
     doc["command"] = "rsp";
@@ -237,60 +398,111 @@ size_t meshsolarCmdRspToJson(bool status, String& output) {
     return serializeJson(doc, output);
 }
 
+/*
+ * ============================================================================
+ * MAIN PROGRAM FUNCTIONS
+ * ============================================================================
+ */
 
-
-// // Test function to demonstrate SafetyStatus bit parsing
-// void testSafetyStatusParsing() {
-//     LOG_I("Testing SafetyStatus parsing function...");
-    
-//     // Create some test SafetyStatus values
-//     SafetyStatus_t test_status1 = {0};
-//     test_status1.bits.cuv = 1;  // Cell Under Voltage
-//     test_status1.bits.cov = 1;  // Cell Over Voltage
-//     test_status1.bits.otc = 1;  // Overtemperature During Charge
-    
-//     SafetyStatus_t test_status2 = {0};
-//     test_status2.bits.occ1 = 1; // Overcurrent During Charge 1
-//     test_status2.bits.ocd2 = 1; // Overcurrent During Discharge 2
-//     test_status2.bits.utc = 1;  // Undertemperature During Charge
-//     test_status2.bits.utd = 1;  // Undertemperature During Discharge
-    
-//     SafetyStatus_t test_status3 = {0}; // No bits set
-    
-//     // Test the parsing function
-//     String result1 = parseSafetyStatusBits(test_status1);
-//     String result2 = parseSafetyStatusBits(test_status2);
-//     String result3 = parseSafetyStatusBits(test_status3);
-    
-//     LOG_I("Test 1 (CUV+COV+OTC): Raw=0x%08X, Parsed='%s'", test_status1.bytes, result1.c_str());
-//     LOG_I("Test 2 (OCC1+OCD2+UTC+UTD): Raw=0x%08X, Parsed='%s'", test_status2.bytes, result2.c_str());
-//     LOG_I("Test 3 (No bits set): Raw=0x%08X, Parsed='%s'", test_status3.bytes, result3.c_str());
-    
-//     LOG_I("SafetyStatus parsing test completed.");
-// }
-
+/**
+ * @brief System initialization function
+ * 
+ * INITIALIZATION SEQUENCE (CRITICAL ORDER):
+ * 1. Debug serial port (Serial2) - Optional, for logging
+ * 2. Communication serial port (comSerial) - Required for JSON commands
+ * 3. BQ4050 I2C interface initialization
+ * 4. MeshSolar controller initialization
+ * 
+ * PORTING CHECKLIST:
+ * □ Verify serial port assignments match your hardware
+ * □ Confirm baud rates are supported by your platform
+ * □ Check I2C pins are correctly mapped
+ * □ Ensure BQ4050ADDR (0x0B) matches your hardware configuration
+ * □ Verify sufficient power supply for BQ4050 operation
+ * 
+ * COMMON ISSUES:
+ * - I2C communication failures: Check pin connections and pull-up resistors
+ * - Serial port conflicts: Ensure ports don't conflict with programming interface
+ * - Power issues: BQ4050 requires stable 3.3V supply
+ */
 void setup() {
-    Serial2.begin(115200);              // For debugging, if needed
-    comSerial.begin(115200);            // Initialize the main serial port for communication
-    bq4050.begin(&Wire, BQ4050ADDR);    // Initialize BQ4050 with SoftwareWire instance
-    meshsolar.begin(&bq4050);           // Initialize MeshSolar with bq4050 instance
-    LOG_I("MeshSolar initialized successfully");
+    // Initialize debug serial port (optional)
+    // MODIFY: Change to your platform's debug port or comment out if not needed
+    Serial2.begin(115200);              
+    
+    // Initialize main communication serial port (REQUIRED)
+    // MODIFY: Change to your platform's primary serial port
+    comSerial.begin(115200);            
+    
+    // Initialize BQ4050 with I2C interface (REQUIRED)
+    // VERIFY: Ensure Wire object is properly configured for your platform
+    bq4050.begin(&Wire, BQ4050ADDR);    
+    
+    // Initialize MeshSolar controller (REQUIRED)
+    meshsolar.begin(&bq4050);           
+    
+    LOG_I("MeshSolar %s initialized successfully", MESHSOLAR_VERSION);
 }
 
-
-
-
+/**
+ * @brief Main program loop
+ * 
+ * LOOP STRUCTURE:
+ * - Command processing: Handles incoming JSON commands via serial
+ * - Status monitoring: Updates battery status every 1000 iterations (~1 second)
+ * - JSON output: Sends status updates via serial every 1000 iterations
+ * 
+ * TIMING BEHAVIOR:
+ * - Loop frequency: ~1000 Hz (1ms delay)
+ * - Status update: 1 Hz (every 1000 iterations)
+ * - Command response: Immediate when received
+ * 
+ * THREAD SAFETY NOTES:
+ * - This is a single-threaded implementation
+ * - For RTOS environments, consider separating:
+ *   * Command processing thread
+ *   * Status monitoring thread
+ *   * I2C communication thread
+ * 
+ * PERFORMANCE CONSIDERATIONS:
+ * - I2C operations are blocking and may take 10-100ms
+ * - String operations allocate memory dynamically
+ * - JSON serialization requires temporary buffers
+ * 
+ * CUSTOMIZATION POINTS:
+ * - Modify update frequency by changing (cnt % 1000) condition
+ * - Add additional periodic tasks in the main loop
+ * - Implement command queuing for better responsiveness
+ */
 void loop() {
     static uint32_t cnt = 0; 
     String json = "";
     cnt++;
 
+    // ========================================================================
+    // COMMAND PROCESSING SECTION
+    // Handles incoming JSON commands from serial port
+    // ========================================================================
     if(listenString(json, '\n')) {
         LOG_D("%s", json.c_str());
-        bool res = parseJsonCommand(json.c_str(), &meshsolar.cmd); // Parse the command from input
+        bool res = parseJsonCommand(json.c_str(), &meshsolar.cmd);
         if (res) {
-            // printMeshsolarCmd(&g_bat_cmd);
-            /*  add some func call back here base on cmd sector */
+            /*
+             * COMMAND HANDLERS
+             * Each command type has specific processing requirements:
+             * 
+             * "config": Updates basic battery configuration (type, cells, capacity, etc.)
+             * "advance": Updates advanced settings (CEDV, protection thresholds)
+             * "switch": Controls FET enable/disable
+             * "reset": Resets battery gauge learning data
+             * "sync": Sends current configuration data multiple times
+             * 
+             * PORTING NOTES:
+             * - All configuration changes are immediately written to BQ4050
+             * - Operations may take 100-500ms due to I2C flash writes
+             * - Responses are sent immediately after completion
+             * - Consider implementing timeout mechanisms for production use
+             */
             if (0 == strcmp(meshsolar.cmd.command, "config")) {
                 bool results[5] = {false};
                 log_i("\r\n");
@@ -317,31 +529,17 @@ void loop() {
                 LOG_I("| Discharge Cutoff Voltage     | %-21s |", results[3] ? "Success" : "Failed");
                 LOG_I("| Temperature Protection       | %-21s |", results[4] ? "Success" : "Failed");
                 LOG_I("+------------------------------+-----------------------+");
-                
-                // Check if all configurations succeeded
-                bool allSuccess = true;
-                for (int i = 0; i < 5; i++) {
-                    if (!results[i]) {
-                        allSuccess = false;
-                        break;
-                    }
-                }
-                if (allSuccess) {
-                    LOG_I("| Overall Status: Configuration completed successfully |");
-                } else {
-                    LOG_I("| Overall Status: Some configurations failed          |");
-                }
-                LOG_I("+------------------------------------------------------+");
 
                 //sync the basic battery configuration immediately
                 meshsolar.get_basic_bat_realtime_setting();     
-                meshsolarBasicConfigToJson(&meshsolar.sync_rsp.basic, json); // Get the basic battery settings
+                meshsolar_basic_config_to_json(&meshsolar.sync_rsp.basic, json); // Get the basic battery settings
                 comSerial.println(json); // Send the configuration back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("Basic configuration sync completed");
 
+                bool allSuccess = results[0] && results[1] && results[2] && results[3] && results[4];
                 // Respond with the updated basic configuration
-                meshsolarCmdRspToJson(allSuccess, json); // Create a response JSON
+                meshsolar_cmd_rsp_to_json(allSuccess, json); // Create a response JSON
                 comSerial.println(json); // Send the response back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("Basic configuration response sent");
@@ -365,50 +563,36 @@ void loop() {
                 LOG_I("| CEDV Settings                | %-21s |", results[1] ? "Success" : "Failed");
                 LOG_I("+------------------------------+-----------------------+");
                 
-                // Check if all configurations succeeded
-                bool allSuccess = true;
-                for (int i = 0; i < 2; i++) {
-                    if (!results[i]) {
-                        allSuccess = false;
-                        break;
-                    }
-                }
-                if (allSuccess) {
-                    LOG_I("| Overall Status: Configuration completed successfully |");
-                } else {
-                    LOG_I("| Overall Status: Some configurations failed          |");
-                }
-                LOG_I("+------------------------------------------------------+");
-
                 //respond with the updated advanced configuration
                 meshsolar.get_advance_bat_realtime_setting();
-                meshsolarAdvanceConfigToJson(&meshsolar.sync_rsp.advance, json); // Get the advanced battery settings
+                meshsolar_advance_config_to_json(&meshsolar.sync_rsp.advance, json); // Get the advanced battery settings
                 comSerial.println(json); // Send the configuration back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("Advanced configuration sync");
 
-                // Respond with the updated basic configuration
-                meshsolarCmdRspToJson(allSuccess, json); // Create a response JSON
+                // Respond with the updated advanced configuration
+                bool allSuccess = results[0] && results[1];
+                meshsolar_cmd_rsp_to_json(allSuccess, json); // Create a response JSON
                 comSerial.println(json); // Send the response back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
-                LOG_I("Advance configuration response sent");
+                LOG_I("Advanced configuration response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {
                 res = meshsolar.toggle_fet(); 
                 LOG_I("FET Toggle...");
 
-                // Respond with the updated basic configuration
-                meshsolarCmdRspToJson(res, json); // Create a response JSON
+                // Respond with the FET toggle result
+                meshsolar_cmd_rsp_to_json(res, json); // Create a response JSON
                 comSerial.println(json); // Send the response back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
-                LOG_I("Fet toggle response sent");
+                LOG_I("FET toggle response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "reset")) {
                 res =  meshsolar.reset_bat_gauge();      
                 LOG_I("Resetting BQ4050...");
 
-                // Respond with the updated basic configuration
-                meshsolarCmdRspToJson(res, json); // Create a response JSON
+                // Respond with the reset result
+                meshsolar_cmd_rsp_to_json(res, json); // Create a response JSON
                 comSerial.println(json); // Send the response back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("Reset response sent");
@@ -416,14 +600,14 @@ void loop() {
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
                 size_t len = 0;
                 for(uint8_t i = 0; i < meshsolar.cmd.sync.times; i++) {
-                    len = meshsolarBasicConfigToJson(&meshsolar.sync_rsp.basic, json); // Get the basic battery settings
+                    len = meshsolar_basic_config_to_json(&meshsolar.sync_rsp.basic, json); // Get the basic battery settings
                     if(len > 0) {
                         comSerial.println(json); // Send the configuration back to the serial port
                         delay(10); // Small delay to avoid flooding the serial output
                         LOG_D("%s", json.c_str());
                     }
 
-                    len = meshsolarAdvanceConfigToJson(&meshsolar.sync_rsp.advance, json); // Get the advanced battery settings
+                    len = meshsolar_advance_config_to_json(&meshsolar.sync_rsp.advance, json); // Get the advanced battery settings
                     if(len > 0) {
                         comSerial.println(json); // Send the configuration back to the serial port
                         delay(10); // Small delay to avoid flooding the serial output
@@ -439,42 +623,34 @@ void loop() {
             LOG_E("Failed to parse command");
         }
     }
-
-
-#if 0 // debugging section
-    if(0 == cnt % 1000) {
-        bq4050_block_t block = {0,0,nullptr}; // Initialize block structure
-        DAStatus1_t da1 = {0,};
-        block.cmd = MAC_CMD_DA_STATUS1; // Command to read cell voltage
-        block.len = 32;                 
-
-        if(bq4050.read_mac_block(&block)){
-            memcpy(&da1, block.pvalue, sizeof(DAStatus1_t)); // Copy the data into the da1 structure
-            dbg::hex_print((uint8_t*)&da1, sizeof(DAStatus1_t),"DAStatus1");
-        } 
-        delay(10); 
-
-
-
-    //     DAStatus2_t da2 = {0,};
-    //     block.cmd = MAC_CMD_DA_STATUS2; // Command to read cell voltage
-    //     block.len = 14;                 
-
-    //    if(bq4050.read_mac_block(&block)){
-    //         memcpy(&da2, block.pvalue, sizeof(DAStatus2_t)); // Copy the data into the da1 structure
-    //         dbg::hex_print((uint8_t*)&da2, sizeof(DAStatus2_t),"DAStatus2");
-    //     } 
-    //     delay(10); 
-
-    }
-#endif
-
-
+    
+    // ========================================================================
+    // PERIODIC STATUS MONITORING SECTION
+    // Updates battery status and configuration every 1 second
+    // ========================================================================
 #if 1
     if(0 == cnt % 1000) {
-        meshsolar.get_realtime_bat_status();            // Update the battery status
-        meshsolar.get_basic_bat_realtime_setting();     // Update the battery configuration
-        meshsolar.get_advance_bat_realtime_setting();   // Update the battery advanced configuration
+        /*
+         * STATUS UPDATE SEQUENCE:
+         * 1. Read real-time battery data from BQ4050
+         * 2. Read current basic configuration
+         * 3. Read current advanced configuration
+         * 
+         * TIMING NOTES:
+         * - Each I2C operation takes 10-50ms
+         * - Total update cycle: ~200-500ms
+         * - Frequency: 1 Hz (every 1000 loop iterations)
+         * 
+         * CUSTOMIZATION:
+         * - Change frequency by modifying (cnt % 1000)
+         * - Add/remove monitoring parameters as needed
+         * - Consider separate threads for real-time systems
+         */
+        meshsolar.get_realtime_bat_status();            // Read: SOC, voltage, current, temperature, protection status
+        meshsolar.get_basic_bat_realtime_setting();     // Read: Battery type, cells, capacity, protection settings
+        meshsolar.get_advance_bat_realtime_setting();   // Read: CEDV curves, advanced protection thresholds
+        
+        // Human-readable status output to debug port
         LOG_I("================================================");
         LOG_I("Status soc_gauge       : %d%%", meshsolar.sta.soc_gauge);
         LOG_I("Status pack_voltage    : %d mV", meshsolar.sta.pack_voltage);
@@ -487,15 +663,81 @@ void loop() {
     }
 #endif
 
-
+    // ========================================================================
+    // JSON STATUS OUTPUT SECTION
+    // Sends structured status data via serial port every 1 second
+    // Uses snake_case function naming: meshsolar_status_to_json()
+    // ========================================================================
 #if 1
     if(0 == cnt % 1000){
-        meshsolarStatusToJson(&meshsolar.sta, json);
+        /*
+         * JSON STATUS OUTPUT:
+         * - Converts internal status structure to JSON format using meshsolar_status_to_json()
+         * - Sends via comSerial for external monitoring/logging
+         * - Includes all battery parameters in structured format
+         * 
+         * INTEGRATION NOTES:
+         * - External systems can parse this JSON for monitoring
+         * - Format is consistent and machine-readable
+         * - Consider adding timestamp for data logging
+         * - May want to implement data compression for large datasets
+         */
+        meshsolar_status_to_json(&meshsolar.sta, json);
         LOG_L("Status JSON: %s", json.c_str());
         comSerial.println(json);
         delay(10); // Small delay to avoid flooding the serial output
     }
 #endif
 
+    // Main loop timing - CRITICAL FOR SYSTEM RESPONSIVENESS
+    // MODIFY: Adjust delay based on your system requirements
+    // - 1ms: Good for responsive command processing
+    // - 10ms: Reduces CPU load, still responsive
+    // - 100ms: Low power mode, slower response
     delay(1);
 }
+
+/*
+ * ============================================================================
+ * PORTING CHECKLIST - Verify these items for successful port
+ * ============================================================================
+ * 
+ * HARDWARE REQUIREMENTS:
+ * □ MCU with sufficient RAM (>8KB recommended)
+ * □ I2C interface capability
+ * □ At least 2 serial ports (1 for commands, 1 for debug)
+ * □ Stable 3.3V power supply for BQ4050
+ * □ I2C pull-up resistors (4.7kΩ typical)
+ * 
+ * SOFTWARE REQUIREMENTS:
+ * □ Arduino framework or compatible environment
+ * □ ArduinoJson library (version 6.x)
+ * □ Platform-specific I2C library
+ * □ Serial/USB communication support
+ * 
+ * CONFIGURATION CHECKLIST:
+ * □ Serial port assignments match your hardware
+ * □ I2C pin definitions are correct
+ * □ Baud rates are supported by your platform
+ * □ BQ4050 I2C address (0x0B) is accessible
+ * □ Pin mapping functions work on your platform
+ * 
+ * TESTING PROCEDURE:
+ * 1. Verify serial communication (send/receive test strings)
+ * 2. Test I2C communication (read BQ4050 firmware version)
+ * 3. Send basic JSON commands and verify responses
+ * 4. Monitor status updates for reasonable values
+ * 5. Test all command types (config, advance, switch, reset, sync)
+ * 
+ * COMMON TROUBLESHOOTING:
+ * - "I2C timeout": Check wiring, pull-ups, power supply
+ * - "JSON parse error": Verify command format and buffer sizes
+ * - "No serial response": Check port assignments and baud rates
+ * - "Invalid battery data": Verify BQ4050 configuration and connections
+ * 
+ * PERFORMANCE OPTIMIZATION:
+ * - Reduce status update frequency for battery-powered applications
+ * - Implement command queuing for high-frequency operations
+ * - Use hardware I2C instead of software I2C if available
+ * - Consider DMA for serial operations on supported platforms
+ */

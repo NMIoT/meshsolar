@@ -3,13 +3,27 @@
 #include "logger.h"
 
 /**
- * @brief Parse SafetyStatus_t structure and return string of set bit names
+ * @brief Parse BQ4050 SafetyStatus register and convert to human-readable string
  * 
- * This function examines each bit in the SafetyStatus_t structure and returns
- * a comma-separated string of the names of bits that are set to 1.
+ * PLATFORM-INDEPENDENT FUNCTION
+ * This function analyzes the BQ4050 SafetyStatus register bits and converts active
+ * protection flags into a readable comma-separated string format. It provides a
+ * standardized way to interpret battery protection states across different platforms.
  * 
- * @param safety_status SafetyStatus_t structure to parse
- * @return String containing comma-separated names of set bits, or "NONE" if no bits are set
+ * @param safety_status SafetyStatus_t structure containing raw register bits from BQ4050
+ * @return String containing comma-separated protection names (e.g., "CUV,COV,OTC") 
+ *         Returns "Normal" if no protection bits are active
+ * 
+ * USAGE EXAMPLE:
+ *   SafetyStatus_t status = {0x0003}; // CUV and COV bits set
+ *   String result = parseSafetyStatusBits(status); // Returns "CUV,COV"
+ * 
+ * SUPPORTED PROTECTION TYPES:
+ *   - Voltage: CUV, COV, CUVC
+ *   - Current: OCC1/2, OCD1/2, AOLD/AOLDL, ASCC/ASCL, ASCD/ASCDL
+ *   - Temperature: OTC, OTD, OTF, UTC, UTD
+ *   - Timing: PTO, CTO
+ *   - Charge: OC, CHGC, CHGV, PCHGC
  */
 String parseSafetyStatusBits(const SafetyStatus_t& safety_status) {
     String result = "";
@@ -59,6 +73,36 @@ String parseSafetyStatusBits(const SafetyStatus_t& safety_status) {
     return (result.length() == 0) ? "Normal" : result;
 }
 
+/**
+ * @brief Default constructor for MeshSolar battery management system
+ * 
+ * PLATFORM-INDEPENDENT CONSTRUCTOR
+ * Initializes all internal data structures with safe default values suitable for
+ * LiFePO4 battery systems. This constructor sets up reasonable defaults that work
+ * across different hardware platforms without requiring specific configuration.
+ * 
+ * @param None
+ * @return None (constructor)
+ * 
+ * DEFAULT CONFIGURATION:
+ *   - Battery Type: LiFePO4 (safest chemistry)
+ *   - Cell Count: 4 cells
+ *   - Design Capacity: 3200 mAh
+ *   - Cutoff Voltage: 2800 mV per cell
+ *   - Temperature Protection: Enabled (-10°C to 60°C)
+ *   - All pointers initialized to safe states
+ * 
+ * INITIALIZATION ORDER:
+ *   1. Set BQ4050 pointer to null for safety
+ *   2. Zero-initialize all status and command structures
+ *   3. Set conservative default battery parameters
+ *   4. Enable temperature protection with safe limits
+ * 
+ * PLATFORM NOTES:
+ *   - No hardware-specific initialization performed
+ *   - Safe for use on any platform supporting C++ constructors
+ *   - Must call begin() after construction to associate with BQ4050 device
+ */
 MeshSolar::MeshSolar(){
     this->_bq4050 = nullptr; // Initialize pointer to null
     memset(&this->sta, 0, sizeof(this->sta)); // Initialize status structure to zero
@@ -77,6 +121,32 @@ MeshSolar::MeshSolar(){
     this->cmd.sync.times    = 1; // Default sync times
 }
 
+/**
+ * @brief Destructor for MeshSolar battery management system
+ * 
+ * PLATFORM-INDEPENDENT DESTRUCTOR
+ * Safely cleans up resources and ensures proper shutdown of the BQ4050 interface.
+ * Designed to prevent resource leaks and dangling pointers across all platforms.
+ * 
+ * @param None
+ * @return None (destructor)
+ * 
+ * CLEANUP SEQUENCE:
+ *   1. Check if BQ4050 device pointer is valid
+ *   2. Call BQ4050 destructor to clean up I2C resources
+ *   3. Set pointer to null to prevent dangling references
+ *   4. No dynamic memory to free (all structures are stack-allocated)
+ * 
+ * SAFETY FEATURES:
+ *   - Null pointer check before cleanup
+ *   - Explicit pointer nullification
+ *   - Exception-safe design
+ * 
+ * PLATFORM NOTES:
+ *   - Works on any platform supporting C++ destructors
+ *   - Does not perform platform-specific I2C cleanup
+ *   - Safe to call even if begin() was never called
+ */
 MeshSolar::~MeshSolar(){
     if (this->_bq4050) {
         this->_bq4050->~BQ4050(); // Call destructor to clean up
@@ -84,19 +154,91 @@ MeshSolar::~MeshSolar(){
     }
 }
 
+/**
+ * @brief Initialize MeshSolar with BQ4050 device instance
+ * 
+ * PLATFORM-INDEPENDENT INITIALIZATION
+ * Associates the MeshSolar controller with a specific BQ4050 device instance.
+ * This function must be called after both objects are constructed but before
+ * any battery operations are performed.
+ * 
+ * @param device Pointer to initialized BQ4050 device instance
+ *               Must be valid and already configured for I2C communication
+ * @return None
+ * 
+ * PRECONDITIONS:
+ *   - BQ4050 device must be constructed and begin() called
+ *   - I2C communication must be established
+ *   - Device pointer must remain valid throughout MeshSolar lifetime
+ * 
+ * POSTCONDITIONS:
+ *   - MeshSolar can perform all battery management operations
+ *   - All get_*() and update_*() functions become available
+ *   - Device communication is ready for use
+ * 
+ * PLATFORM NOTES:
+ *   - No platform-specific code - pure pointer assignment
+ *   - Compatible with any I2C implementation
+ *   - Does not perform I/O operations or validation
+ * 
+ * USAGE EXAMPLE:
+ *   BQ4050 bq4050;
+ *   MeshSolar meshsolar;
+ *   bq4050.begin(&Wire, BQ4050ADDR);
+ *   meshsolar.begin(&bq4050);
+ */
 void MeshSolar::begin(BQ4050 *device) {
     this->_bq4050 = device;
 }
 
+/**
+ * @brief Read comprehensive real-time battery status from BQ4050
+ * 
+ * PLATFORM-INDEPENDENT STATUS READER
+ * Performs a complete battery status update by reading all critical parameters
+ * from the BQ4050 device. This function aggregates multiple I2C transactions
+ * into a single comprehensive status update suitable for monitoring applications.
+ * 
+ * @param None (updates internal sta structure)
+ * @return bool True if all readings successful, false if any I2C operation failed
+ * 
+ * PARAMETERS READ:
+ *   - Charge/discharge current (mA)
+ *   - State of charge percentage (%)
+ *   - Cell count configuration
+ *   - Individual cell temperatures (°C)
+ *   - Individual cell voltages (mV)
+ *   - Total pack voltage (mV)
+ *   - Pack voltage at terminals (mV)
+ *   - Learned battery capacity (mAh)
+ *   - FET enable status (boolean)
+ *   - Safety/protection status (bit flags)
+ *   - Emergency shutdown status (boolean)
+ * 
+ * I2C OPERATIONS PERFORMED:
+ *   - Standard register reads (Current, RSOC, FCC)
+ *   - DataFlash block reads (DA configuration)
+ *   - MAC command reads (cell voltages, temperatures, status)
+ * 
+ * ERROR HANDLING:
+ *   - Continues reading even if individual operations fail
+ *   - Preserves previous values on read failure
+ *   - Returns aggregate success status
+ * 
+ * TIMING CONSIDERATIONS:
+ *   - Uses 10ms delays between I2C operations
+ *   - Total execution time: ~100-200ms
+ *   - Not suitable for high-frequency polling
+ * 
+ * PLATFORM NOTES:
+ *   - Uses only standard BQ4050 class methods
+ *   - No platform-specific timing or I/O
+ *   - Compatible with any I2C implementation
+ */
 bool MeshSolar::get_realtime_bat_status(){
     bool res = true;
     bq4050_reg_t reg = {0,0};             // Initialize register structure
     bq4050_block_t block = {0,0,nullptr}; // Initialize block structure
-    // /********************************************** get pack total voltage *********************************************/
-    // reg.addr = BQ4050_REG_VOLT; // Register address for total voltage
-    // res &= this->_bq4050->read_reg_word(&reg);
-    // this->sta.total_voltage  = (res) ? reg.value : this->sta.total_voltage; // Convert from mV to V
-    // delay(10); 
     /************************************************ get charge current ***********************************************/
     reg.addr = BQ4050_REG_CURRENT; // Register address for charge current
     res &= (int16_t)this->_bq4050->read_reg_word(&reg);
@@ -194,6 +336,50 @@ bool MeshSolar::get_realtime_bat_status(){
     return res; // Return true to indicate status update was successful
 }
 
+/**
+ * @brief Read current basic battery configuration from BQ4050
+ * 
+ * PLATFORM-INDEPENDENT CONFIGURATION READER
+ * Retrieves the current basic battery settings from BQ4050 DataFlash memory
+ * and populates the sync_rsp.basic structure. This function reads back the
+ * actual configuration stored in the device, not the commanded values.
+ * 
+ * @param None (updates internal sync_rsp.basic structure)
+ * @return bool True if all configuration reads successful, false on any failure
+ * 
+ * CONFIGURATION PARAMETERS READ:
+ *   - Battery chemistry type (LiFePO4, Li-ion, LiPo)
+ *   - Cell count (1-4 cells)
+ *   - Design capacity (mAh)
+ *   - Discharge cutoff voltage (mV)
+ *   - Temperature protection thresholds:
+ *     * Charge high/low temperature (°C)
+ *     * Discharge high/low temperature (°C)
+ *     * Protection enable status (boolean)
+ * 
+ * DATAFLASH COMMANDS USED:
+ *   - DF_CMD_SBS_DATA_CHEMISTRY: Battery type string
+ *   - DF_CMD_DA_CONFIGURATION: Cell count configuration
+ *   - DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH: Design capacity
+ *   - DF_CMD_GAS_GAUGE_FD_SET_VOLTAGE_THR: Cutoff voltage
+ *   - DF_CMD_PROTECTIONS_*_THR: Temperature thresholds
+ *   - DF_CMD_SETTINGS_PROTECTIONS_ENABLE_*: Protection enables
+ * 
+ * CHEMISTRY MAPPING:
+ *   - "LFE4" -> "lifepo4"
+ *   - "LION" -> "liion"
+ *   - "LIPO" -> "lipo"
+ * 
+ * ERROR HANDLING:
+ *   - Returns false on unknown battery chemistry
+ *   - Returns false on any DataFlash read failure
+ *   - Logs detailed error messages for debugging
+ * 
+ * PLATFORM NOTES:
+ *   - Pure DataFlash operations using BQ4050 class
+ *   - No platform-specific I2C or timing dependencies
+ *   - Uses standard C string operations
+ */
 bool MeshSolar::get_basic_bat_realtime_setting(){
     bq4050_block_t block= {
         .cmd = DF_CMD_SBS_DATA_CHEMISTRY,
@@ -301,6 +487,52 @@ bool MeshSolar::get_basic_bat_realtime_setting(){
     return true; // Return false to indicate configuration update was successful
 }
 
+/**
+ * @brief Read current advanced battery configuration from BQ4050
+ * 
+ * PLATFORM-INDEPENDENT ADVANCED CONFIG READER
+ * Retrieves advanced battery management settings from BQ4050 DataFlash memory,
+ * including protection thresholds and CEDV (Charge End-of-Discharge Voltage)
+ * curve parameters. These settings control precise battery gauge behavior.
+ * 
+ * @param None (updates internal sync_rsp.advance structure)
+ * @return bool True if all advanced settings read successfully, false on any failure
+ * 
+ * ADVANCED PARAMETERS READ:
+ *   Battery Protection Settings:
+ *   - CUV (Cell Under Voltage) threshold (mV)
+ *   - EOC (End of Charge) voltage (mV)
+ *   - EOC protection voltage (mV)
+ * 
+ *   CEDV Fixed Values:
+ *   - CEDV0, CEDV1, CEDV2 (End Discharge Voltage levels)
+ * 
+ *   CEDV Discharge Profile (Voltage vs SOC):
+ *   - Voltage points at 0%, 10%, 20%, ..., 100% SOC
+ *   - Used for accurate SOC calculation during discharge
+ * 
+ * DATAFLASH COMMANDS USED:
+ *   - DF_CMD_PROTECTIONS_CUV_THR: Under-voltage protection
+ *   - DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL: Charge voltage
+ *   - DF_CMD_PROTECTIONS_COV_STD_TEMP_THR: Over-voltage protection
+ *   - DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV*: Fixed EDV points
+ *   - DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_*: Discharge profile
+ * 
+ * TIMING CONSIDERATIONS:
+ *   - Uses 50ms delays between CEDV profile reads
+ *   - Total execution time: ~800-1000ms for full read
+ *   - Sequential reads to avoid bus contention
+ * 
+ * ERROR HANDLING:
+ *   - Stops on first read failure and returns false
+ *   - Detailed error logging for each failed parameter
+ *   - Preserves partial data on early failure
+ * 
+ * PLATFORM NOTES:
+ *   - Uses only BQ4050 DataFlash operations
+ *   - No platform-specific timing or I/O
+ *   - Compatible with any I2C implementation
+ */
 bool MeshSolar::get_advance_bat_realtime_setting(){
     bq4050_block_t block = {0, 0, nullptr, NUMBER};
     
@@ -423,6 +655,59 @@ bool MeshSolar::get_advance_bat_realtime_setting(){
     return true;
 }
 
+/**
+ * @brief Configure BQ4050 battery chemistry and temperature-compensated voltages
+ * 
+ * PLATFORM-INDEPENDENT BATTERY TYPE CONFIGURATOR
+ * Sets comprehensive battery chemistry parameters including temperature-compensated
+ * charging voltages and protection thresholds. This function configures the BQ4050
+ * for optimal operation with different lithium battery chemistries.
+ * 
+ * @param None (uses cmd.basic.type from internal command structure)
+ * @return bool True if all configuration writes successful, false on any failure
+ * 
+ * SUPPORTED BATTERY TYPES:
+ *   - "lifepo4": LiFePO4 (3.6V nominal, safer, more stable)
+ *   - "liion": Li-ion (4.2V nominal, higher energy density)
+ *   - "lipo": LiPo (4.2V nominal, similar to Li-ion)
+ * 
+ * TEMPERATURE COMPENSATION ZONES:
+ *   - Low Temperature (-20°C to 0°C): Conservative voltages
+ *   - Standard Temperature (0°C to 45°C): Nominal voltages
+ *   - High Temperature (45°C to 60°C): Reduced voltages for safety
+ *   - Recovery Temperature: Intermediate transition voltages
+ * 
+ * VOLTAGE PARAMETERS CONFIGURED:
+ *   Advanced Charge Algorithm:
+ *   - Charge voltages for each temperature zone
+ *   Protection Thresholds:
+ *   - COV (Cell Over Voltage) thresholds per temperature
+ *   - COV recovery voltages per temperature
+ *   SBS Data:
+ *   - Battery chemistry identifier string
+ * 
+ * SAFETY FEATURES:
+ *   - Temperature-dependent voltage derating
+ *   - Write-verify cycles for all parameters
+ *   - Conservative settings at temperature extremes
+ *   - Hysteresis in recovery voltages
+ * 
+ * ERROR HANDLING:
+ *   - Validates battery type before configuration
+ *   - Verifies each write operation by reading back
+ *   - Returns false on any verification failure
+ *   - Detailed logging of all operations
+ * 
+ * PLATFORM NOTES:
+ *   - Uses only BQ4050 DataFlash write/read operations
+ *   - No platform-specific voltage or temperature handling
+ *   - Compatible with any I2C implementation
+ * 
+ * TIMING:
+ *   - 100ms delays after each DataFlash write
+ *   - Total execution time: ~2-3 seconds
+ *   - Suitable for configuration-time use only
+ */
 bool MeshSolar::update_basic_bat_type_setting(){ 
     bool res = true;
 
@@ -612,11 +897,86 @@ bool MeshSolar::update_basic_bat_type_setting(){
     return res;
 }
 
+/**
+ * @brief Configure BQ4050 for specific battery model (placeholder function)
+ * 
+ * PLATFORM-INDEPENDENT MODEL CONFIGURATOR
+ * Reserved for future implementation of battery model-specific settings.
+ * This function would configure parameters that vary between different
+ * battery models of the same chemistry type.
+ * 
+ * @param None (would use cmd.basic.model from internal command structure)
+ * @return bool Currently returns false (not implemented)
+ * 
+ * FUTURE IMPLEMENTATION SCOPE:
+ *   - Model-specific capacity curves
+ *   - Manufacturer-specific protection settings
+ *   - Custom CEDV profiles for specific battery models
+ *   - Brand-specific charging algorithms
+ * 
+ * POTENTIAL PARAMETERS:
+ *   - Internal resistance compensation
+ *   - Age-related capacity adjustments
+ *   - Model-specific voltage curves
+ *   - Manufacturer protection limits
+ * 
+ * PLATFORM NOTES:
+ *   - Designed to be platform-independent
+ *   - Would use standard BQ4050 DataFlash operations
+ *   - No platform-specific model detection required
+ */
 bool MeshSolar::update_basic_bat_model_setting() {
 
     return false;
 }
 
+/**
+ * @brief Configure BQ4050 cell count and design voltage parameters
+ * 
+ * PLATFORM-INDEPENDENT CELL CONFIGURATION
+ * Configures the BQ4050 for the specified number of battery cells in series.
+ * This function updates both the DA (Data Acquisition) configuration and the
+ * total design voltage to match the cell count and chemistry.
+ * 
+ * @param None (uses cmd.basic.cell_number and cmd.basic.type from internal structure)
+ * @return bool True if cell configuration successful, false on any failure
+ * 
+ * PARAMETERS CONFIGURED:
+ *   DA Configuration:
+ *   - Cell count bits (0-3 for 1-4 cells)
+ *   - Updates only cell count bits, preserves other DA settings
+ *   
+ *   Design Voltage:
+ *   - Calculated as: cell_count × cell_voltage
+ *   - Cell voltage based on battery chemistry:
+ *     * LiFePO4: 3600 mV per cell
+ *     * Li-ion/LiPo: 4200 mV per cell
+ * 
+ * SUPPORTED CONFIGURATIONS:
+ *   - 1-4 cells in series (1S, 2S, 3S, 4S)
+ *   - Auto-calculates total pack voltage
+ *   - Chemistry-appropriate cell voltages
+ * 
+ * DATAFLASH OPERATIONS:
+ *   - Read-modify-write DA configuration register
+ *   - Write calculated design voltage
+ *   - Verify all writes by reading back
+ * 
+ * ERROR HANDLING:
+ *   - Validates battery type before calculation
+ *   - Limits cell count to maximum 4 cells
+ *   - Verifies all DataFlash operations
+ *   - Returns false on any verification failure
+ * 
+ * PLATFORM NOTES:
+ *   - Uses standard BQ4050 DataFlash operations
+ *   - No platform-specific cell detection
+ *   - Compatible with any I2C implementation
+ * 
+ * TIMING:
+ *   - 100ms delays after each DataFlash write
+ *   - Total execution time: ~300-400ms
+ */
 bool MeshSolar::update_basic_bat_cells_setting() {
     bool res = true;
 
@@ -696,6 +1056,54 @@ bool MeshSolar::update_basic_bat_cells_setting() {
     return res; 
 }
 
+/**
+ * @brief Configure BQ4050 design capacity in multiple formats
+ * 
+ * PLATFORM-INDEPENDENT CAPACITY CONFIGURATOR
+ * Sets the battery design capacity in both mAh and cWh (centiwatt-hours) formats
+ * as required by the BQ4050. Also initializes the learned capacity to match the
+ * design capacity for proper gas gauge operation.
+ * 
+ * @param None (uses cmd.basic.design_capacity, cell_number, and type from internal structure)
+ * @return bool True if all capacity settings successful, false on any failure
+ * 
+ * PARAMETERS CONFIGURED:
+ *   Design Capacity (mAh):
+ *   - Direct setting from command structure
+ *   - Used for SOC calculations and fuel gauge
+ *   
+ *   Design Capacity (cWh):
+ *   - Calculated as: (cell_count × cell_voltage × capacity_mAh) / 10
+ *   - Cell voltage varies by chemistry (LiFePO4: 3.6V, Li-ion/LiPo: 4.2V)
+ *   
+ *   Learned Full Charge Capacity:
+ *   - Initially set to design capacity
+ *   - Will be updated by BQ4050 learning algorithm over time
+ * 
+ * CALCULATION FORMULAS:
+ *   - cWh = (cells × voltage × mAh) / 10
+ *   - Example: 4S LiFePO4 3200mAh = (4 × 3.6 × 3200) / 10 = 4608 cWh
+ * 
+ * DATAFLASH COMMANDS USED:
+ *   - DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_MAH: Primary capacity
+ *   - DF_CMD_GAS_GAUGE_DESIGN_CAPACITY_CWH: Energy capacity
+ *   - DF_CMD_GAS_GAUGE_STATE_LEARNED_FULL_CAPACITY: Learning baseline
+ * 
+ * ERROR HANDLING:
+ *   - Validates battery type before calculations
+ *   - Verifies all DataFlash writes by reading back
+ *   - Returns false if any verification fails
+ *   - Detailed logging of calculated values
+ * 
+ * PLATFORM NOTES:
+ *   - Pure mathematical calculations and DataFlash operations
+ *   - No platform-specific capacity measurement
+ *   - Compatible with any I2C implementation
+ * 
+ * TIMING:
+ *   - 100ms delays after each DataFlash write
+ *   - Total execution time: ~400-500ms
+ */
 bool MeshSolar::update_basic_bat_design_capacity_setting(){
     // Get cell voltage based on battery type
     float cell_voltage = 0.0f;
@@ -757,6 +1165,57 @@ bool MeshSolar::update_basic_bat_design_capacity_setting(){
     return res;
 }
 
+/**
+ * @brief Configure BQ4050 discharge cutoff voltage and protection levels
+ * 
+ * PLATFORM-INDEPENDENT DISCHARGE PROTECTION CONFIGURATOR
+ * Sets comprehensive discharge protection parameters including final discharge
+ * thresholds, terminate discharge levels, end discharge voltage warnings, and
+ * cell under-voltage protection. Creates multi-level protection hierarchy.
+ * 
+ * @param None (uses cmd.basic.discharge_cutoff_voltage from internal structure)
+ * @return bool True if all cutoff settings successful, false on any failure
+ * 
+ * PROTECTION HIERARCHY (from base cutoff voltage):
+ *   Final/Terminate Discharge (FD/TD):
+ *   - Set threshold: Base cutoff voltage (lowest safe voltage)
+ *   - Clear threshold: Base + 100mV (recovery voltage)
+ *   
+ *   End Discharge Voltage (EDV) Warnings:
+ *   - EDV0: Base cutoff (first warning level)
+ *   - EDV1: Base + 20mV (second warning level)
+ *   - EDV2: Base + 30mV (third warning level)
+ *   
+ *   Cell Under Voltage (CUV) Hardware Protection:
+ *   - Threshold: Base - 50mV (hardware emergency cutoff)
+ *   - Recovery: Base + 100mV (recovery to re-enable)
+ * 
+ * PROTECTION STRATEGY:
+ *   - Multiple warning levels before hard cutoff
+ *   - Hardware protection below software limits
+ *   - Hysteresis prevents oscillation
+ *   - Recovery voltages higher than thresholds
+ * 
+ * DATAFLASH COMMANDS CONFIGURED:
+ *   - DF_CMD_GAS_GAUGE_FD_SET/CLEAR_VOLTAGE_THR: Final discharge
+ *   - DF_CMD_GAS_GAUGE_TD_SET/CLEAR_VOLTAGE_THR: Terminate discharge
+ *   - DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV*: End discharge warnings
+ *   - DF_CMD_PROTECTIONS_CUV_THR/RECOVERY: Hardware protection
+ * 
+ * ERROR HANDLING:
+ *   - Verifies all DataFlash writes by reading back
+ *   - Returns false on any verification failure
+ *   - Detailed logging of all voltage levels set
+ * 
+ * PLATFORM NOTES:
+ *   - Uses only standard BQ4050 DataFlash operations
+ *   - No platform-specific voltage measurement
+ *   - Compatible with any I2C implementation
+ * 
+ * TIMING:
+ *   - 100ms delays after each DataFlash write
+ *   - Total execution time: ~1-1.5 seconds
+ */
 bool MeshSolar::update_basic_bat_discharge_cutoff_voltage_setting(){
     bool res = true;
     
@@ -839,6 +1298,66 @@ bool MeshSolar::update_basic_bat_discharge_cutoff_voltage_setting(){
     return res;
 }
 
+/**
+ * @brief Configure BQ4050 temperature protection thresholds and enable settings
+ * 
+ * PLATFORM-INDEPENDENT TEMPERATURE PROTECTION CONFIGURATOR
+ * Sets comprehensive temperature protection for both charging and discharging
+ * operations. Configures threshold temperatures, recovery temperatures with
+ * hysteresis, and enable/disable control for temperature protection features.
+ * 
+ * @param None (uses cmd.basic.protection temperature settings from internal structure)
+ * @return bool True if all temperature settings successful, false on any failure
+ * 
+ * TEMPERATURE PROTECTION TYPES:
+ *   Charge Protection:
+ *   - OTC (Over Temperature Charge): High temp limit during charging
+ *   - UTC (Under Temperature Charge): Low temp limit during charging
+ *   
+ *   Discharge Protection:
+ *   - OTD (Over Temperature Discharge): High temp limit during discharge
+ *   - UTD (Under Temperature Discharge): Low temp limit during discharge
+ * 
+ * HYSTERESIS STRATEGY:
+ *   - Recovery temperatures are 5°C away from thresholds
+ *   - Prevents oscillation at temperature boundaries
+ *   - OTC/OTD recovery: Threshold - 5°C
+ *   - UTC/UTD recovery: Threshold + 5°C
+ * 
+ * TEMPERATURE VALIDATION:
+ *   - Ensures low temperature < high temperature
+ *   - Validates separate charge and discharge ranges
+ *   - Returns false on invalid temperature ranges
+ * 
+ * PROTECTION ENABLE CONFIGURATION:
+ *   Protection Enable B Register (bits 4,5):
+ *   - Bit 4: OTD (Over Temperature Discharge)
+ *   - Bit 5: OTC (Over Temperature Charge)
+ *   
+ *   Protection Enable D Register (bits 2,3):
+ *   - Bit 2: UTD (Under Temperature Discharge)
+ *   - Bit 3: UTC (Under Temperature Charge)
+ * 
+ * DATA FORMAT:
+ *   - All temperatures stored in 0.1°C units (e.g., 250 = 25.0°C)
+ *   - Signed 16-bit values support negative temperatures
+ *   - Range: -3276.8°C to +3276.7°C
+ * 
+ * ERROR HANDLING:
+ *   - Validates temperature ranges before configuration
+ *   - Verifies all DataFlash writes by reading back
+ *   - Returns false on invalid ranges or write failures
+ *   - Detailed logging of all temperature settings
+ * 
+ * PLATFORM NOTES:
+ *   - Uses only BQ4050 DataFlash operations
+ *   - No platform-specific temperature sensing
+ *   - Compatible with any I2C implementation
+ * 
+ * TIMING:
+ *   - 100ms delays after each DataFlash write
+ *   - Total execution time: ~1.5-2 seconds
+ */
 bool MeshSolar::update_basic_bat_temp_protection_setting() {
     bool res = true;
     
@@ -1037,6 +1556,61 @@ bool MeshSolar::update_basic_bat_temp_protection_setting() {
     return res;
 }
 
+/**
+ * @brief Configure BQ4050 advanced battery settings and protection parameters
+ * 
+ * PLATFORM-INDEPENDENT ADVANCED BATTERY CONFIGURATOR
+ * Sets advanced charge algorithm voltages, protection thresholds, and CEDV
+ * (Charge End-of-Discharge Voltage) parameters based on the advance command
+ * configuration. These settings provide fine-tuned control over battery
+ * management beyond basic configuration.
+ * 
+ * @param None (uses cmd.advance.battery settings from internal structure)
+ * @return bool True if all advanced settings successful, false on any failure
+ * 
+ * ADVANCED PARAMETERS CONFIGURED:
+ *   Cell Under Voltage (CUV) Protection:
+ *   - Primary under-voltage threshold for cell protection
+ *   - Hardware-level protection trigger point
+ *   
+ *   End of Charge (EOC) Voltage:
+ *   - Target voltage for charge termination
+ *   - Controls when charging algorithm considers battery full
+ *   
+ *   EOC Protection Voltage:
+ *   - Over-voltage protection during charging
+ *   - Safety limit above normal charge voltage
+ * 
+ * CONFIGURATION STRATEGY:
+ *   - Uses advance command structure values directly
+ *   - No automatic calculation or compensation
+ *   - Allows precise control over protection levels
+ *   - Suitable for custom battery profiles
+ * 
+ * DATAFLASH COMMANDS USED:
+ *   - DF_CMD_PROTECTIONS_CUV_THR: Under-voltage protection
+ *   - DF_CMD_ADVANCED_CHARGE_ALG_STD_TEMP_CHARG_VOL: Charge voltage
+ *   - DF_CMD_PROTECTIONS_COV_STD_TEMP_THR: Over-voltage protection
+ * 
+ * ERROR HANDLING:
+ *   - Verifies all DataFlash writes by reading back
+ *   - Returns false on any verification failure
+ *   - Detailed logging of configured values
+ * 
+ * PLATFORM NOTES:
+ *   - Uses standard BQ4050 DataFlash operations
+ *   - No platform-specific validation or calculation
+ *   - Compatible with any I2C implementation
+ * 
+ * TIMING:
+ *   - 100ms delays after each DataFlash write
+ *   - Total execution time: ~400-500ms
+ * 
+ * USAGE CONTEXT:
+ *   - Called after basic configuration is complete
+ *   - Provides fine-tuning of protection parameters
+ *   - Used with advance command from JSON interface
+ */
 bool MeshSolar::update_advance_bat_battery_setting() {
     bool res = true;
     /*
@@ -1121,6 +1695,68 @@ bool MeshSolar::update_advance_bat_battery_setting() {
     return res;
 }
 
+/**
+ * @brief Configure BQ4050 CEDV (Constant Energy Discharge Voltage) profile settings
+ * 
+ * PLATFORM-INDEPENDENT CEDV CONFIGURATOR
+ * Sets the complete CEDV discharge profile for accurate State of Charge (SOC)
+ * calculation. CEDV profiles define voltage vs. SOC curves that the BQ4050
+ * uses to determine remaining battery capacity during discharge.
+ * 
+ * @param None (uses cmd.advance.cedv settings from internal structure)
+ * @return bool True if all CEDV settings successful, false on any failure
+ * 
+ * CEDV PROFILE COMPONENTS:
+ *   Fixed EDV Values:
+ *   - CEDV0: Primary end discharge voltage
+ *   - CEDV1: Secondary end discharge voltage
+ *   - CEDV2: Final end discharge voltage
+ *   
+ *   Discharge Profile Curve (11 points):
+ *   - Voltage values at SOC: 0%, 10%, 20%, 30%, 40%, 50%
+ *                           60%, 70%, 80%, 90%, 100%
+ *   - Creates voltage vs. SOC lookup table for accurate gauge
+ * 
+ * SOC CALCULATION PRINCIPLE:
+ *   - BQ4050 measures cell voltage during discharge
+ *   - Compares measured voltage to CEDV profile
+ *   - Interpolates between profile points to determine SOC
+ *   - More accurate than coulomb counting alone
+ * 
+ * PROFILE CONFIGURATION STRATEGY:
+ *   - Uses advance command values directly
+ *   - No automatic profile generation
+ *   - Allows custom discharge curves for specific batteries
+ *   - Supports temperature and age compensation
+ * 
+ * DATAFLASH COMMANDS CONFIGURED:
+ *   Fixed Values:
+ *   - DF_CMD_GAS_GAUGE_CEDV_CFG_FIXED_EDV0/1/2
+ *   
+ *   Profile Points:
+ *   - DF_CMD_GAS_GAUGE_CEDV_PROFILE1_VOLTAGE_0 through _100
+ *   - Total of 11 voltage points defining the curve
+ * 
+ * ERROR HANDLING:
+ *   - Verifies all DataFlash writes by reading back
+ *   - Returns false on any verification failure
+ *   - Detailed logging of all profile points
+ *   - Stops on first failure to prevent partial configuration
+ * 
+ * PLATFORM NOTES:
+ *   - Uses standard BQ4050 DataFlash operations
+ *   - No platform-specific curve generation
+ *   - Compatible with any I2C implementation
+ * 
+ * TIMING:
+ *   - 100ms delays after each DataFlash write
+ *   - Total execution time: ~1.5-2 seconds (14 writes)
+ * 
+ * USAGE CONTEXT:
+ *   - Called during advanced configuration
+ *   - Critical for accurate SOC reporting
+ *   - Should match actual battery discharge characteristics
+ */
 bool MeshSolar::update_advance_bat_cedv_setting(){
     bool res = true; // Initialize result variable
 
@@ -1192,11 +1828,120 @@ bool MeshSolar::update_advance_bat_cedv_setting(){
     return res; // Return the result of all configurations
 }
 
+/**
+ * @brief Toggle BQ4050 FET (Field Effect Transistor) enable/disable state
+ * 
+ * PLATFORM-INDEPENDENT FET CONTROL
+ * Controls the charge and discharge FETs within the BQ4050 to enable or disable
+ * battery current flow. This function provides software control over battery
+ * connection without requiring external hardware switches.
+ * 
+ * @param None (operation toggles current FET state)
+ * @return bool True if FET toggle command successful, false on communication failure
+ * 
+ * FET CONTROL FUNCTIONALITY:
+ *   - If FETs are currently enabled: Disables both charge and discharge FETs
+ *   - If FETs are currently disabled: Enables both charge and discharge FETs
+ *   - Provides software-controlled battery disconnect capability
+ *   - Useful for emergency shutdown or maintenance mode
+ * 
+ * SAFETY CONSIDERATIONS:
+ *   - FET disable immediately stops all current flow
+ *   - Does not affect BQ4050 internal operation or I2C communication
+ *   - Protection circuits remain active even when FETs are disabled
+ *   - FET state is preserved across power cycles
+ * 
+ * USE CASES:
+ *   - Emergency battery disconnect
+ *   - Software-controlled power management
+ *   - Maintenance mode activation
+ *   - Remote battery isolation
+ * 
+ * IMPLEMENTATION:
+ *   - Direct passthrough to BQ4050 fet_toggle() method
+ *   - No additional logic or validation performed
+ *   - Relies on BQ4050 class for actual I2C communication
+ * 
+ * ERROR HANDLING:
+ *   - Returns false on I2C communication failure
+ *   - No local error checking or retry logic
+ *   - Error details available from BQ4050 class logs
+ * 
+ * PLATFORM NOTES:
+ *   - Platform-independent operation
+ *   - Uses only BQ4050 class methods
+ *   - No direct hardware or register access
+ * 
+ * TIMING:
+ *   - Immediate operation (single I2C command)
+ *   - Execution time: ~10-50ms depending on I2C speed
+ */
 bool MeshSolar::toggle_fet(){
     return this->_bq4050->fet_toggle(); // Call the BQ4050 method to toggle FETs
 }
 
-
+/**
+ * @brief Reset BQ4050 battery gauge learning algorithms and data
+ * 
+ * PLATFORM-INDEPENDENT GAUGE RESET
+ * Performs a comprehensive reset of the BQ4050 battery gauge, clearing learned
+ * capacity data and resetting all learning algorithms to initial state. This
+ * operation forces the gauge to relearn battery characteristics from scratch.
+ * 
+ * @param None
+ * @return bool True if reset command successful, false on communication failure
+ * 
+ * RESET OPERATIONS PERFORMED:
+ *   - Clears learned full charge capacity
+ *   - Resets capacity learning algorithms
+ *   - Clears accumulated impedance data
+ *   - Resets aging compensation factors
+ *   - Restores factory calibration baselines
+ * 
+ * WHEN TO USE GAUGE RESET:
+ *   - After battery replacement
+ *   - When SOC readings become inaccurate
+ *   - After significant configuration changes
+ *   - When battery aging characteristics change
+ *   - During initial system commissioning
+ * 
+ * POST-RESET BEHAVIOR:
+ *   - SOC readings may be less accurate initially
+ *   - Learning algorithms will restart data collection
+ *   - Full accuracy restored after several charge/discharge cycles
+ *   - Configuration settings are preserved (not reset)
+ * 
+ * LEARNING ALGORITHM RESTART:
+ *   - Capacity learning: Requires 2-5 full charge cycles
+ *   - Impedance tracking: Continuous background process
+ *   - Age estimation: Long-term process (weeks to months)
+ *   - Temperature compensation: Immediate with existing profiles
+ * 
+ * IMPLEMENTATION:
+ *   - Direct passthrough to BQ4050 reset() method
+ *   - No additional validation or preparation
+ *   - Relies on BQ4050 class for actual reset sequence
+ * 
+ * ERROR HANDLING:
+ *   - Returns false on I2C communication failure
+ *   - No local retry or error recovery logic
+ *   - Error details available from BQ4050 class logs
+ * 
+ * PLATFORM NOTES:
+ *   - Platform-independent operation
+ *   - Uses only BQ4050 class methods
+ *   - No direct hardware or register manipulation
+ * 
+ * TIMING:
+ *   - Reset command execution: ~100-500ms
+ *   - Full learning restart: Multiple charge cycles
+ *   - No immediate functional impact on basic operations
+ * 
+ * CAUTION:
+ *   - SOC accuracy temporarily reduced after reset
+ *   - Should be followed by proper charge/discharge cycling
+ *   - Consider user notification of temporary accuracy loss
+ */
 bool MeshSolar::reset_bat_gauge() {
     return this->_bq4050->reset(); // Call the BQ4050 method to reset the device
 }

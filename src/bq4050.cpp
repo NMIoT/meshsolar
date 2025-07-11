@@ -95,12 +95,14 @@ bool BQ4050::_wd_mac_cmd(uint16_t cmd){
 }
 
 
-// Blockdata [38] bytes: [0x16,0x44,0x17,     0x22,0x71,0x00,0x57,0x0e,0x58,0x0e,0x58,
-//                                            0x0e,0x55,0x0e, 0x5a,0x39, 0x51,0x39,0xfc,
-//                                            0xff,0xfb,0xff,0xfb,0xff,0xfe,0xff,0xff,
-//                                            0xff,0xfe,0xff,0xfe,0xff,0xff,0xff,0xfa,
-//                                            0x00,0x00,0x00]
+
 bool BQ4050::_rd_mac_block(bq4050_block_t *block){
+    // Blockdata [38] bytes: [0x16,0x44,0x17,     0x22,0x71,0x00,0x57,0x0e,0x58,0x0e,0x58,
+    //                                            0x0e,0x55,0x0e, 0x5a,0x39, 0x51,0x39,0xfc,
+    //                                            0xff,0xfb,0xff,0xfb,0xff,0xfe,0xff,0xff,
+    //                                            0xff,0xfe,0xff,0xfe,0xff,0xff,0xff,0xfa,
+    //                                            0x00,0x00,0x00]
+
     static uint8_t buf[32+4+2];
     memset(buf, 0, sizeof(buf));                // Clear the buffer to avoid garbage data
 
@@ -166,7 +168,6 @@ bool BQ4050::_rd_df_block(bq4050_block_t *block) {
     buf[2] = this->wire->read(); // Read the next two bytes as command
 
     if(*(uint16_t*)(buf + 1) != block->cmd) {
-        // dbgSerial.print("Command mismatch!");
         LOG_E("Command mismatch! Expected: 0x%04X, Received: 0x%04X", block->cmd, *(uint16_t*)(buf + 1));
         return false;
     }
@@ -176,7 +177,6 @@ bool BQ4050::_rd_df_block(bq4050_block_t *block) {
             buf[i + 3] = this->wire->read(); // Read the data bytes
         }
         else {
-            // dbgSerial.println("Block data read error, not enough data available.");
             LOG_E("Block data read error, not enough data available.");
             return false; 
         }
@@ -217,30 +217,21 @@ bool BQ4050::write_dataflash_block(bq4050_block_t block) {
     uint8_t result = this->wire->endTransmission();
     
     if (result != 0) {
-        // dbgSerial.print("Write to DF block failed with error code: ");
-        // dbgSerial.print(result);
         LOG_W("Write to DF block failed with error code: %d", result);
         switch(result) {
             case 1:
-                // dbgSerial.println(" (Data too long to fit in transmit buffer)");
                 LOG_W(" (Data too long to fit in transmit buffer)");
                 break;
             case 2:
-                // dbgSerial.print(" (Received NACK on transmit of address 0x");
-                // dbgSerial.print(this->devAddr, HEX);
-                // dbgSerial.println(")");
                 LOG_W(" (Received NACK on transmit of address 0x%02X)", this->devAddr);
                 break;
             case 3:
-                // dbgSerial.println(" (Received NACK on transmit of data)");
                 LOG_W(" (Received NACK on transmit of data)");
                 break;
             case 4:
-                // dbgSerial.println(" (Other error)");
                 LOG_W(" (SMBus error)");
                 break;
             default:
-                // dbgSerial.println(" (Unknown error)");
                 LOG_W(" (Unknown error)");
         }
         return false; // Return false if transmission was not successful

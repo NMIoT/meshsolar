@@ -253,7 +253,6 @@ class BQ4050{
 private:
     SoftwareWire *wire;
     uint8_t crctable[256];
-    bool printResults ; // Set to true to print CRC results to the debug serial
     uint8_t devAddr;
     void crc8_tab_init();
     uint8_t compute_crc8(uint8_t *bytes, int byteLen);
@@ -263,12 +262,14 @@ private:
     bool _rd_df_block(bq4050_block_t  *block);
 
 public:
-    BQ4050(bool printResults = false){
-        this->printResults = printResults;
+    BQ4050() : wire(nullptr), devAddr(BQ4050ADDR) {
+        // Initialize member variables
     }
     ~BQ4050() {
-        this->wire->end();
-        delete this->wire;
+        // Only end the wire connection, don't delete the external pointer
+        if (this->wire != nullptr) {
+            this->wire->end();
+        }
     }
 
     void begin(SoftwareWire *pwire, uint8_t devaddr = BQ4050ADDR) {
