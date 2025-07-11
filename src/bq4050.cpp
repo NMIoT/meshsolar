@@ -262,15 +262,15 @@ bool BQ4050::read_dataflash_block(bq4050_block_t *block) {
 
 bool BQ4050::fet_toggle(){
     if(this->_wd_mac_cmd(MAC_CMD_FET_CONTROL)) {
-        delay(500); // Wait for the device to process the command
+        delay(100);  // Wait for the device to process the command
         return true; // Return true if command was sent successfully
     }
-    return false; // Return false if there was an error sending the command
+    return false;    // Return false if there was an error sending the command
 }
 
 bool BQ4050::reset(){
     if(this->_wd_mac_cmd(MAC_CMD_DEV_RESET)) {
-        delay(500); // Wait for the device to reset
+        delay(100);  // Wait for the device to reset
         return true; // Return true if reset command was sent successfully
     }
     return false; // Return false if there was an error sending the reset command

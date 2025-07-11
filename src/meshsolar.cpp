@@ -2,6 +2,63 @@
 #include "meshsolar.h"
 #include "logger.h"
 
+/**
+ * @brief Parse SafetyStatus_t structure and return string of set bit names
+ * 
+ * This function examines each bit in the SafetyStatus_t structure and returns
+ * a comma-separated string of the names of bits that are set to 1.
+ * 
+ * @param safety_status SafetyStatus_t structure to parse
+ * @return String containing comma-separated names of set bits, or "NONE" if no bits are set
+ */
+String parseSafetyStatusBits(const SafetyStatus_t& safety_status) {
+    String result = "";
+    bool first = true;
+    
+    // Helper lambda to add bit name to result if bit is set
+    auto addIfSet = [&](bool bit_value, const char* bit_name) {
+        if (bit_value) {
+            if (!first) {
+                result += ",";
+            }
+            result += bit_name;
+            first = false;
+        }
+    };
+    
+    // Check all bits in SafetyStatus_t structure
+    // Bits 0-15 (Low word)
+    addIfSet(safety_status.bits.cuv,    "CUV");     // Cell Under Voltage
+    addIfSet(safety_status.bits.cov,    "COV");     // Cell Over Voltage
+    addIfSet(safety_status.bits.occ1,   "OCC1");    // Overcurrent During Charge 1
+    addIfSet(safety_status.bits.occ2,   "OCC2");    // Overcurrent During Charge 2
+    addIfSet(safety_status.bits.ocd1,   "OCD1");    // Overcurrent During Discharge 1
+    addIfSet(safety_status.bits.ocd2,   "OCD2");    // Overcurrent During Discharge 2
+    addIfSet(safety_status.bits.aold,   "AOLD");    // Overload During Discharge
+    addIfSet(safety_status.bits.aoldl,  "AOLDL");   // Overload During Discharge Latch
+    addIfSet(safety_status.bits.ascc,   "ASCC");    // Short-circuit During Charge
+    addIfSet(safety_status.bits.ascl,   "ASCL");    // Short-circuit During Charge Latch
+    addIfSet(safety_status.bits.ascd,   "ASCD");    // Short-circuit During Discharge
+    addIfSet(safety_status.bits.ascdl,  "ASCDL");   // Short-circuit During Discharge Latch
+    addIfSet(safety_status.bits.otc,    "OTC");     // Overtemperature During Charge
+    addIfSet(safety_status.bits.otd,    "OTD");     // Overtemperature During Discharge
+    addIfSet(safety_status.bits.cuvc,   "CUVC");    // Cell Undervoltage Compensated
+    
+    // Bits 16-31 (High word)
+    addIfSet(safety_status.bits.otf,    "OTF");     // Overtemperature FET
+    addIfSet(safety_status.bits.pto,    "PTO");     // Precharge Timeout
+    addIfSet(safety_status.bits.cto,    "CTO");     // Charge Timeout
+    addIfSet(safety_status.bits.oc,     "OC");      // Overcharge
+    addIfSet(safety_status.bits.chgc,   "CHGC");    // Overcharging Current
+    addIfSet(safety_status.bits.chgv,   "CHGV");    // Overcharging Voltage
+    addIfSet(safety_status.bits.pchgc,  "PCHGC");   // Over-Precharge Current
+    addIfSet(safety_status.bits.utc,    "UTC");     // Undertemperature During Charge
+    addIfSet(safety_status.bits.utd,    "UTD");     // Undertemperature During Discharge
+    
+    // Return "NONE" if no bits are set, otherwise return the comma-separated list
+    return (result.length() == 0) ? "Normal" : result;
+}
+
 MeshSolar::MeshSolar(){
     this->_bq4050 = nullptr; // Initialize pointer to null
     memset(&this->sta, 0, sizeof(this->sta)); // Initialize status structure to zero
@@ -117,10 +174,14 @@ bool MeshSolar::get_realtime_bat_status(){
     block.len = 4;                     // Length of the data block to read
     res &= this->_bq4050->read_mac_block(&block); // Read the data block from the BQ4050
     memcpy(&safety_status, block.pvalue, sizeof(SafetyStatus_t)); // Copy the data into the safety_status structure
-    // Convert 4-byte SafetyStatus to hex string (8 characters + null terminator)
-    // Format as big-endian hex string: MSB first 
-    snprintf(this->sta.protection_sta, sizeof(this->sta.protection_sta), "%08X", (unsigned int)safety_status.bytes);
-    LOG_L("Protection status: %s", this->sta.protection_sta); // Log protection status in hex format
+    
+    // Parse SafetyStatus bits and get human-readable string
+    String safety_bits_str = parseSafetyStatusBits(safety_status);
+    // Store the parsed bit names in protection_sta field (truncate if too long)
+    strncpy(this->sta.protection_sta, safety_bits_str.c_str(), sizeof(this->sta.protection_sta) - 1);
+    this->sta.protection_sta[sizeof(this->sta.protection_sta) - 1] = '\0'; // Ensure null termination
+    LOG_L("Protection status raw: %08X", (unsigned int)safety_status.bytes); // Log raw hex value
+    LOG_L("Protection status bits: %s", this->sta.protection_sta); // Log parsed bit names
     /**************************************************** get operation status **************************************/
     OperationStatus_t operation_status = {0,};
     block.cmd = MAC_CMD_OPERATION_STATUS;   // Command to read operation status

@@ -163,7 +163,7 @@ size_t meshsolarStatusToJson(const meshsolar_status_t* status, String& output) {
     doc["pack_voltage"]     = String(status->pack_voltage);
     doc["fet_enable"]       = status->fet_enable;
     doc["protection_sta"]   = status->protection_sta;
-
+    doc["emergency_shutdown"] = status->emergency_shutdown;
     JsonArray cells = doc.createNestedArray("cells");
     for (int i = 0; i < 4; ++i) {
         JsonObject cell     = cells.createNestedObject();
@@ -237,6 +237,38 @@ size_t meshsolarCmdRspToJson(bool status, String& output) {
     return serializeJson(doc, output);
 }
 
+
+
+// // Test function to demonstrate SafetyStatus bit parsing
+// void testSafetyStatusParsing() {
+//     LOG_I("Testing SafetyStatus parsing function...");
+    
+//     // Create some test SafetyStatus values
+//     SafetyStatus_t test_status1 = {0};
+//     test_status1.bits.cuv = 1;  // Cell Under Voltage
+//     test_status1.bits.cov = 1;  // Cell Over Voltage
+//     test_status1.bits.otc = 1;  // Overtemperature During Charge
+    
+//     SafetyStatus_t test_status2 = {0};
+//     test_status2.bits.occ1 = 1; // Overcurrent During Charge 1
+//     test_status2.bits.ocd2 = 1; // Overcurrent During Discharge 2
+//     test_status2.bits.utc = 1;  // Undertemperature During Charge
+//     test_status2.bits.utd = 1;  // Undertemperature During Discharge
+    
+//     SafetyStatus_t test_status3 = {0}; // No bits set
+    
+//     // Test the parsing function
+//     String result1 = parseSafetyStatusBits(test_status1);
+//     String result2 = parseSafetyStatusBits(test_status2);
+//     String result3 = parseSafetyStatusBits(test_status3);
+    
+//     LOG_I("Test 1 (CUV+COV+OTC): Raw=0x%08X, Parsed='%s'", test_status1.bytes, result1.c_str());
+//     LOG_I("Test 2 (OCC1+OCD2+UTC+UTD): Raw=0x%08X, Parsed='%s'", test_status2.bytes, result2.c_str());
+//     LOG_I("Test 3 (No bits set): Raw=0x%08X, Parsed='%s'", test_status3.bytes, result3.c_str());
+    
+//     LOG_I("SafetyStatus parsing test completed.");
+// }
+
 void setup() {
     Serial2.begin(115200);              // For debugging, if needed
     comSerial.begin(115200);            // Initialize the main serial port for communication
@@ -246,18 +278,6 @@ void setup() {
 }
 
 
-
-// {"command":"config","battery":{"type":"liion","cell_number":2,"design_capacity":3001,"cutoff_voltage":2551},"temperature_protection":{"discharge_high_temp_c":61,"discharge_low_temp_c":1,"charge_high_temp_c":41,"charge_low_temp_c":1,"temp_enabled":false}}
-
-// {"command":"advance","battery":{"cuv":2701,"eoc":4201,"eoc_protect":4351},"cedv":{"cedv0":2561,"cedv1":2571,"cedv2":2581,"discharge_cedv0":4151,"discharge_cedv10":4051,"discharge_cedv20":4001,"discharge_cedv30":3901,"discharge_cedv40":3851,"discharge_cedv50":3801,"discharge_cedv60":3651,"discharge_cedv70":3551,"discharge_cedv80":3501,"discharge_cedv90":3301,"discharge_cedv100":2561}}
-
-// {"command":"status","soc_gauge":0,"charge_current":0,"total_voltage":"15.688","learned_capacity":"3.237","pack_voltage":"12821","fet_enable":true,"protection_sta":"00000001","cells":[{"cell_num":1,"temperature":-53.44998932,"voltage":3.931000233},{"cell_num":2,"temperature":-53.44998932,"voltage":3.929000139},{"cell_num":3,"temperature":-53.44998932,"voltage":3.934000254}]}
-
-// {"command":"sync","times":3}
-
-// {"command":"rsp","status":true}
-
-// {"command":"reset"}
 
 
 void loop() {
@@ -374,12 +394,24 @@ void loop() {
                 LOG_I("Advance configuration response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {
-                meshsolar.toggle_fet(); 
+                res = meshsolar.toggle_fet(); 
                 LOG_I("FET Toggle...");
+
+                // Respond with the updated basic configuration
+                meshsolarCmdRspToJson(res, json); // Create a response JSON
+                comSerial.println(json); // Send the response back to the serial port
+                delay(10); // Small delay to avoid flooding the serial output
+                LOG_I("Fet toggle response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "reset")) {
-                meshsolar.reset_bat_gauge();      
+                res =  meshsolar.reset_bat_gauge();      
                 LOG_I("Resetting BQ4050...");
+
+                // Respond with the updated basic configuration
+                meshsolarCmdRspToJson(res, json); // Create a response JSON
+                comSerial.println(json); // Send the response back to the serial port
+                delay(10); // Small delay to avoid flooding the serial output
+                LOG_I("Reset response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
                 size_t len = 0;

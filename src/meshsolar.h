@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include "bq4050.h"
 
+// Forward declaration for SafetyStatus_t parsing function
+String parseSafetyStatusBits(const SafetyStatus_t& safety_status);
+
 // Temperature protection structure
 typedef struct {
     float   discharge_high_temp_c;       // Discharge high temperature threshold (°C)
@@ -90,7 +93,7 @@ typedef struct {
     int             cell_count;          // Number of valid cells in the array
     bool            fet_enable;          // FET enable status
     uint16_t        pack_voltage;        // pack voltage (mV)
-    char            protection_sta[32];  // Command type, e.g. "cuv", "chgv", "dischv", "none"
+    char            protection_sta[128]; // Protection status as parsed bit names string, e.g. "CUV,COV,OTC"
     bool            emergency_shutdown;  // Emergency shutdown status
 } meshsolar_status_t;
 
