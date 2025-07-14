@@ -72,8 +72,7 @@ cd meshsolar
 
 ### 2. Install Dependencies
 Install using Arduino Library Manager:
-- ArduinoJson (by Benoit Blanchon)
-- Platform-specific I2C libraries
+- Copy SoftwareWire.cpp and SoftwareWire.h to your workspace.
 
 ### 3. Hardware Connection
 ```
