@@ -71,8 +71,12 @@ cd meshsolar
 ```
 
 ### 2. Install Dependencies
-Install using Arduino Library Manager:
-- Copy SoftwareWire.cpp and SoftwareWire.h to your workspace.
+This project has minimal dependencies and maximum portability:
+- **No third-party library dependencies** - Only requires standard Arduino framework
+- **Software I2C implementation** - No hardware I2C dependency, works on any platform
+- **Self-contained modules** - All BQ4050 and battery management code included
+- **Easy integration** - Simply copy all files from `src/` directory to your workspace (except `main.cpp` which is the example implementation)
+
 
 ### 3. Hardware Connection
 ```
