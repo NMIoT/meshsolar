@@ -290,8 +290,9 @@ size_t meshsolar_status_to_json(const meshsolar_status_t* status, String& output
     doc["learned_capacity"] = String(status->learned_capacity /1000.0f, 3);
     doc["pack_voltage"]     = String(status->pack_voltage);
     doc["fet_enable"]       = status->fet_enable;
-    doc["protection_sta"]   = status->protection_sta;
-    doc["emergency_shutdown"] = status->emergency_shutdown;
+    doc["protection_sta"]   = String(status->protection_sta) + String((status->emergency_shutdown) ? ",EMSHUT" : "");
+    // doc["emergency_shutdown"] = status->emergency_shutdown;
+    
     JsonArray cells = doc.createNestedArray("cells");
     for (int i = 0; i < 4; ++i) {
         JsonObject cell     = cells.createNestedObject();
