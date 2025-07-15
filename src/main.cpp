@@ -5,8 +5,9 @@
 #include "SoftwareWire.h"
 #include "bq4050.h"
 #include "logger.h"
+#include <Adafruit_NeoPixel.h>
 
-#define MESHSOLAR_VERSION  "v0.6"
+#define MESHSOLAR_VERSION  "v1.0"
 
 /*
  * ============================================================================
@@ -61,6 +62,7 @@
 // I2C pin definitions - MODIFY FOR YOUR HARDWARE
 #define SDA_PIN             33          // I2C data line pin
 #define SCL_PIN             32          // I2C clock line pin
+#define RGB_LED_PIN         47          // RGB LED data line pin
 // Common pin assignments:
 // ESP32: GPIO 21 (SDA), GPIO 22 (SCL)
 // Arduino Uno: A4 (SDA), A5 (SCL)
@@ -69,7 +71,8 @@
 // Global object declarations - INITIALIZATION ORDER IS CRITICAL!
 // For nRF52840: Uses g_ADigitalPinMap[] for pin mapping
 // For other platforms: Use direct pin numbers like SoftwareWire Wire(SDA_PIN, SCL_PIN);
-SoftwareWire Wire( g_ADigitalPinMap[SDA_PIN], g_ADigitalPinMap[SCL_PIN]);
+SoftwareWire      Wire( g_ADigitalPinMap[SDA_PIN], g_ADigitalPinMap[SCL_PIN]);
+Adafruit_NeoPixel strip(1, g_ADigitalPinMap[RGB_LED_PIN], NEO_GRBW + NEO_KHZ800);
 BQ4050       bq4050;               // BQ4050 instance
 MeshSolar    meshsolar;            // Main MeshSolar controller object   
 
@@ -442,6 +445,20 @@ void setup() {
     // Initialize MeshSolar controller (REQUIRED)
     meshsolar.begin(&bq4050);           
     
+    // INITIALIZE NeoPixel strip object (REQUIRED)
+    strip.begin();     
+
+    // Turn OFF all pixels ASAP
+    strip.show();       
+    
+    // Set brightness to 100% (0-255 range)
+    strip.setBrightness(100);
+
+    // Set all pixels to black (off)
+    for (int i = 0; i < strip.numPixels(); i++) {
+        strip.setPixelColor(i, strip.Color(0, 0, 0, 0)); // Set pixel to black
+    }
+
     LOG_I("MeshSolar %s initialized successfully", MESHSOLAR_VERSION);
 }
 
@@ -476,9 +493,17 @@ void setup() {
  * - Implement command queuing for better responsiveness
  */
 void loop() {
-    static uint32_t cnt = 0; 
+    static uint32_t cnt = 0;
     String json = "";
     cnt++;
+
+#if 1
+        uint32_t b = (uint32_t)(255 * sin(cnt * 0.01 + M_PI / 1));
+        uint32_t g = (uint32_t)(255 * sin(cnt * 0.01 + M_PI / 2));
+        uint32_t r = (uint32_t)(255 * sin(cnt * 0.01 + M_PI / 3));
+        strip.setPixelColor(0, strip.Color(r, g, b));        
+        strip.show();
+#endif
 
     // ========================================================================
     // COMMAND PROCESSING SECTION
