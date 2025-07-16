@@ -60,9 +60,10 @@
 // STM32: Serial, Serial1, etc.
 
 // I2C pin definitions - MODIFY FOR YOUR HARDWARE
-#define SDA_PIN             33          // I2C data line pin
-#define SCL_PIN             32          // I2C clock line pin
-#define RGB_LED_PIN         47          // RGB LED data line pin
+#define SDA_PIN                         33          // I2C data line pin
+#define SCL_PIN                         32          // I2C clock line pin
+#define RGB_LED_PIN                     47          // RGB LED data line pin
+#define EMERGENCY_SHUTDOWN_PIN          35          // Emergency shutdown pin
 // Common pin assignments:
 // ESP32: GPIO 21 (SDA), GPIO 22 (SCL)
 // Arduino Uno: A4 (SDA), A5 (SCL)
@@ -430,6 +431,11 @@ size_t meshsolar_cmd_rsp_to_json(bool status, String& output) {
  * - Power issues: BQ4050 requires stable 3.3V supply
  */
 void setup() {
+
+    pinMode(EMERGENCY_SHUTDOWN_PIN, OUTPUT);    // Set emergency shutdown pin as output
+
+    digitalWrite(EMERGENCY_SHUTDOWN_PIN, HIGH); // Set emergency shutdown pin to HIGH (disabled)
+
     // Initialize debug serial port (optional)
     // MODIFY: Change to your platform's debug port or comment out if not needed
     Serial2.begin(115200);              
