@@ -7,7 +7,7 @@
 #include "logger.h"
 #include <Adafruit_NeoPixel.h>
 
-#define MESHSOLAR_VERSION  "v1.0"
+#define MESHSOLAR_VERSION  "v1.1"
 
 /*
  * ============================================================================
@@ -503,7 +503,7 @@ void loop() {
     String json = "";
     cnt++;
 
-#if 1
+#if 0
         uint32_t b = (uint32_t)(255 * sin(cnt * 0.01 + M_PI / 1));
         uint32_t g = (uint32_t)(255 * sin(cnt * 0.01 + M_PI / 2));
         uint32_t r = (uint32_t)(255 * sin(cnt * 0.01 + M_PI / 3));
