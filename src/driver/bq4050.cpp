@@ -1,6 +1,6 @@
 
 #include "bq4050.h"
-#include "logger.h"
+#include "../utils/logger.h"
 
 
 void BQ4050::crc8_tab_init(){

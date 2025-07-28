@@ -1,6 +1,6 @@
 #include "bq4050.h"
 #include "meshsolar.h"
-#include "logger.h"
+#include "../utils/logger.h"
 
 /**
  * @brief Parse BQ4050 SafetyStatus register and convert to human-readable string
