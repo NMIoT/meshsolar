@@ -479,9 +479,9 @@ void meshSolarStart(void)
         } \
     } while (0)
 
-#define WRITE_TRY_NUM 1
+#define WRITE_TRY_NUM 6
 #define WRITE_TRY_INTERVAL 100
-#define READ_TRY_NUM 1
+#define READ_TRY_NUM 6
 #define READ_TRY_INTERVAL 100
 
 int meshSolarCmdHandle(const char *cmd)
