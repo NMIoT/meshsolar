@@ -15,18 +15,19 @@
 /**
  * @brief Debug level for error messages.
  */
-#define ERROR           0
-#define WARNING         1
-#define INFO            2
-#define LOG             3
-#define DEBUG           4
+#define NONE            1
+#define ERROR           2
+#define WARNING         3
+#define INFO            4
+#define LOG             5
+#define DEBUG           6
 
 // Define log control macros before including logger.h
 // Log color control: 1: Enable color output, 0: Disable color output
 #define LOG_ANSI_COLOR_ENABLE  0
 // Log level control: ERROR(0), WARNING(1), INFO(2), LOG(3), DEBUG(4)
 // Higher values include all lower levels
-#define DBG_LEVEL             INFO  
+#define DBG_LEVEL             NONE  
 
 /**
  * @brief Default debug level.
