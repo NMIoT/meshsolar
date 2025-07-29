@@ -468,7 +468,7 @@ void meshSolarStart(void)
     LOG_I("MeshSolar %s initialized successfully", MESHSOLAR_VERSION);
 }
 
-#define TRY_WRITE(RETRY_NUM, RETRY_INTERVAL, RESULT_VAR, EXPR) \
+#define TRY_EXECUTE(RETRY_NUM, RETRY_INTERVAL, RESULT_VAR, EXPR) \
     do { \
         int _try_num; \
         for (_try_num = 0; _try_num < (RETRY_NUM); _try_num++) { \
@@ -487,7 +487,8 @@ void meshSolarStart(void)
 int meshSolarCmdHandle(const char *cmd)
 {
     int result = 0;
-    bool results[5] = {false};
+    bool writeResults[5] = {false};
+    bool readResults[5] = {false};
 
     if((cmd==NULL) ||(xSemaphoreTake(xMutex, 100)!=pdTRUE))
     {
@@ -495,10 +496,9 @@ int meshSolarCmdHandle(const char *cmd)
     }
     if (0 == strncmp(cmd,"{\"command\":\"renew\"}", strlen("{\"command\":\"renew\"}"))) 
     {
-        bool res;
-        TRY_WRITE(READ_TRY_NUM, READ_TRY_INTERVAL, results[0], meshsolar.get_realtime_bat_status());
-        TRY_WRITE(READ_TRY_NUM, READ_TRY_INTERVAL, results[1], meshsolar.get_basic_bat_realtime_setting());
-        TRY_WRITE(READ_TRY_NUM, READ_TRY_INTERVAL, results[2], meshsolar.get_advance_bat_realtime_setting());
+        TRY_EXECUTE(READ_TRY_NUM, READ_TRY_INTERVAL, readResults[0], meshsolar.get_realtime_bat_status());
+        TRY_EXECUTE(READ_TRY_NUM, READ_TRY_INTERVAL, readResults[1], meshsolar.get_basic_bat_realtime_setting());
+        TRY_EXECUTE(READ_TRY_NUM, READ_TRY_INTERVAL, readResults[2], meshsolar.get_advance_bat_realtime_setting());
         xSemaphoreGive(xMutex);
         return 0;
     }
@@ -529,11 +529,11 @@ int meshSolarCmdHandle(const char *cmd)
 
                 // Execute all configuration methods first
 
-                TRY_WRITE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, results[0], meshsolar.update_basic_bat_type_setting());
-                TRY_WRITE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, results[1], meshsolar.update_basic_bat_cells_setting());
-                TRY_WRITE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, results[2], meshsolar.update_basic_bat_design_capacity_setting());
-                TRY_WRITE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, results[3], meshsolar.update_basic_bat_discharge_cutoff_voltage_setting());
-                TRY_WRITE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, results[4], meshsolar.update_basic_bat_temp_protection_setting());
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[0], meshsolar.update_basic_bat_type_setting());
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[1], meshsolar.update_basic_bat_cells_setting());
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[2], meshsolar.update_basic_bat_design_capacity_setting());
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[3], meshsolar.update_basic_bat_discharge_cutoff_voltage_setting());
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[4], meshsolar.update_basic_bat_temp_protection_setting());
                 
                 // Print the results table after all executions
                 log_i("\r\n");
@@ -543,21 +543,21 @@ int meshSolarCmdHandle(const char *cmd)
                 LOG_I("+------------------------------------------------------+");
                 LOG_I("| Setting                      | Status                |");
                 LOG_I("+------------------------------+-----------------------+");
-                LOG_I("| Battery Type                 | %-21s |", results[0] ? "Success" : "Failed");
-                LOG_I("| Battery Cells                | %-21s |", results[1] ? "Success" : "Failed");
-                LOG_I("| Design Capacity              | %-21s |", results[2] ? "Success" : "Failed");
-                LOG_I("| Discharge Cutoff Voltage     | %-21s |", results[3] ? "Success" : "Failed");
-                LOG_I("| Temperature Protection       | %-21s |", results[4] ? "Success" : "Failed");
+                LOG_I("| Battery Type                 | %-21s |", writeResults[0] ? "Success" : "Failed");
+                LOG_I("| Battery Cells                | %-21s |", writeResults[1] ? "Success" : "Failed");
+                LOG_I("| Design Capacity              | %-21s |", writeResults[2] ? "Success" : "Failed");
+                LOG_I("| Discharge Cutoff Voltage     | %-21s |", writeResults[3] ? "Success" : "Failed");
+                LOG_I("| Temperature Protection       | %-21s |", writeResults[4] ? "Success" : "Failed");
                 LOG_I("+------------------------------+-----------------------+");
 
                 //sync the basic battery configuration immediately
-                meshsolar.get_basic_bat_realtime_setting();
+                TRY_EXECUTE(READ_TRY_NUM, READ_TRY_INTERVAL, readResults[0], meshsolar.get_basic_bat_realtime_setting());
                 meshsolar_basic_config_to_json(&meshsolar.sync_rsp.basic, json); // Get the basic battery settings
                 comSerial.println(json); // Send the configuration back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("Basic configuration sync completed");
 
-                bool allSuccess = results[0] && results[1] && results[2] && results[3] && results[4];
+                bool allSuccess = writeResults[0] && writeResults[1] && writeResults[2] && writeResults[3] && writeResults[4];
                 // Respond with the updated basic configuration
                 meshsolar_cmd_rsp_to_json(allSuccess, json); // Create a response JSON
                 comSerial.println(json); // Send the response back to the serial port
@@ -565,63 +565,63 @@ int meshSolarCmdHandle(const char *cmd)
                 LOG_I("Basic configuration response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "advance")) {
-                bool results[2] = {false};
                 log_i("\r\n");
                 LOG_W("Updating advanced battery configuration...");
                 
                 // Execute all configuration methods first
-                results[0] = meshsolar.update_advance_bat_battery_setting();
-                results[1] = meshsolar.update_advance_bat_cedv_setting();
-                
+
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[0], meshsolar.update_advance_bat_battery_setting());
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[1], meshsolar.update_advance_bat_cedv_setting());
+
                 // Print the results table after all executions
                 LOG_I("+------------------------------------------------------+");
                 LOG_I("|      Advanced Battery Configuration Update           |");
                 LOG_I("+------------------------------------------------------+");
                 LOG_I("| Setting                      | Status                |");
                 LOG_I("+------------------------------+-----------------------+");
-                LOG_I("| Advanced Battery Settings    | %-21s |", results[0] ? "Success" : "Failed");
-                LOG_I("| CEDV Settings                | %-21s |", results[1] ? "Success" : "Failed");
+                LOG_I("| Advanced Battery Settings    | %-21s |", writeResults[0] ? "Success" : "Failed");
+                LOG_I("| CEDV Settings                | %-21s |", writeResults[1] ? "Success" : "Failed");
                 LOG_I("+------------------------------+-----------------------+");
                 
                 //respond with the updated advanced configuration
-                meshsolar.get_advance_bat_realtime_setting();
+                TRY_EXECUTE(READ_TRY_NUM, READ_TRY_INTERVAL, readResults[0], meshsolar.get_advance_bat_realtime_setting());
                 meshsolar_advance_config_to_json(&meshsolar.sync_rsp.advance, json); // Get the advanced battery settings
                 comSerial.println(json); // Send the configuration back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("Advanced configuration sync");
 
                 // Respond with the updated advanced configuration
-                bool allSuccess = results[0] && results[1];
+                bool allSuccess = writeResults[0] && writeResults[1];
                 meshsolar_cmd_rsp_to_json(allSuccess, json); // Create a response JSON
                 comSerial.println(json); // Send the response back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("Advanced configuration response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "switch")) {
-                res = meshsolar.toggle_fet(); 
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[0], meshsolar.toggle_fet());
                 LOG_I("FET Toggle...");
 
                 // Respond with the FET toggle result
-                meshsolar_cmd_rsp_to_json(res, json); // Create a response JSON
+                meshsolar_cmd_rsp_to_json(writeResults[0], json); // Create a response JSON
                 comSerial.println(json); // Send the response back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("FET toggle response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "reset")) {
-                res =  meshsolar.reset_bat_gauge();      
+                TRY_EXECUTE(WRITE_TRY_NUM, WRITE_TRY_INTERVAL, writeResults[0], meshsolar.reset_bat_gauge());     
                 LOG_I("Resetting BQ4050...");
 
                 // Respond with the reset result
-                meshsolar_cmd_rsp_to_json(res, json); // Create a response JSON
+                meshsolar_cmd_rsp_to_json(writeResults[0], json); // Create a response JSON
                 comSerial.println(json); // Send the response back to the serial port
                 delay(10); // Small delay to avoid flooding the serial output
                 LOG_I("Reset response sent");
             }
             else if (0 == strcmp(meshsolar.cmd.command, "sync")) {
                 size_t len = 0;
-                TRY_WRITE(READ_TRY_NUM, READ_TRY_INTERVAL, results[0], meshsolar.get_realtime_bat_status());
-                TRY_WRITE(READ_TRY_NUM, READ_TRY_INTERVAL, results[1], meshsolar.get_basic_bat_realtime_setting());
-                TRY_WRITE(READ_TRY_NUM, READ_TRY_INTERVAL, results[2], meshsolar.get_advance_bat_realtime_setting());    
+                TRY_EXECUTE(READ_TRY_NUM, READ_TRY_INTERVAL, readResults[0], meshsolar.get_realtime_bat_status());
+                TRY_EXECUTE(READ_TRY_NUM, READ_TRY_INTERVAL, readResults[1], meshsolar.get_basic_bat_realtime_setting());
+                TRY_EXECUTE(READ_TRY_NUM, READ_TRY_INTERVAL, readResults[2], meshsolar.get_advance_bat_realtime_setting());    
                 len = meshsolar_status_to_json(&meshsolar.sta, json);
                 if(len > 0) {
                     comSerial.println(json); // Send the configuration back to the serial port
