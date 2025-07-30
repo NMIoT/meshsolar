@@ -431,9 +431,9 @@ static volatile SemaphoreHandle_t xMutex;
 void meshSolarStart(void)
 {
 
-    pinMode(EMERGENCY_SHUTDOWN_PIN, OUTPUT);    // Set emergency shutdown pin as output
+    pinMode(EMERGENCY_SHUTDOWN_PIN, INPUT);    // Set emergency shutdown pin as  high impedance
 
-    digitalWrite(EMERGENCY_SHUTDOWN_PIN, HIGH); // Set emergency shutdown pin to HIGH (disabled)
+ //   digitalWrite(EMERGENCY_SHUTDOWN_PIN, HIGH); // Set emergency shutdown pin to HIGH (disabled)
 
     // Initialize debug serial port (optional)
     // MODIFY: Change to your platform's debug port or comment out if not needed
